@@ -1,0 +1,10 @@
+# environment.yml
+name: asersa_env
+channels:
+  - defaults
+dependencies:
+  - python=3.8
+  - numpy
+  - matplotlib
+  - seaborn
+  - networkx
