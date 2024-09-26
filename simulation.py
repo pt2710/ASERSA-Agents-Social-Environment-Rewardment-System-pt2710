@@ -14,12 +14,12 @@ class Simulation:
         self.time_step = 0
         self.running = False
         self.network = None
+        self.agent_histories = {}  # Initialize agent_histories here
         self.initialize_simulation()
         self.wealth_history = []
         self.time_series = []
         self.gini_history = []
         self.avg_competence_history = []
-        self.agent_histories = {}  # To store individual agent histories
 
     def initialize_simulation(self):
         initial_wealths = np.random.uniform(W_MIN, W_MAX, NUM_AGENTS)
@@ -150,3 +150,31 @@ class Simulation:
             df.to_csv(agent_filename, index=False)
             print(f"Agent {agent_id} data exported to {agent_filename}")
         """
+    def get_agents(self):
+        return self.agents
+    
+    def get_average_wealth(self):
+        return np.mean([agent.W for agent in self.agents])
+    
+    def get_gini_coefficient(self):
+        wealths = [agent.W for agent in self.agents]
+        return gini_coefficient(wealths)
+    
+    def get_average_competence(self):
+        return np.mean([agent.C for agent in self.agents])
+    
+    def get_time_series(self):
+        return self.time_series
+    
+    def get_wealth_time_series(self):
+        return self.wealth_history
+    
+    def get_network(self):
+        return self.network
+    
+    def get_agent_by_id(self, agent_id):
+        return next((a for a in self.agents if a.agent_id == agent_id), None)
+    
+    def adjust_parameter(self, value):
+        for agent in self.agents:
+            agent.some_property = value

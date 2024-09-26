@@ -165,18 +165,21 @@ class MainWindow(QMainWindow):
             self.agent_table.setItem(i, 3, QTableWidgetItem(f"{agent.C:.2f}"))
             self.agent_table.setItem(i, 4, QTableWidgetItem(f"{agent.S:.2f}"))
 
-    def agent_selected(self):
+    def agent_selected(self, selected, deselected):
         selected_items = self.agent_table.selectedItems()
         if selected_items:
-            agent_id = int(selected_items[0].text())
+            agent_id = float(selected_items[0].text())
             self.show_agent_details(agent_id)
 
     def show_agent_details(self, agent_id):
         agent = self.simulation.get_agent_by_id(agent_id)
-        time_series = self.simulation.get_time_series()
-        agent_window = AgentDetailsWindow(agent, time_series)
-        self.agent_details_windows.append(agent_window)
-        agent_window.show()
+        if agent:
+            time_series = self.simulation.get_time_series()
+            agent_window = AgentDetailsWindow(agent, time_series)
+            self.agent_details_windows.append(agent_window)
+            agent_window.show()
+        else:
+            print(f"No agent found with ID: {agent_id}")
 
     def update_stats(self):
         avg_wealth = self.simulation.get_average_wealth()
