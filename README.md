@@ -115,8 +115,6 @@ numpy
 matplotlib
 seaborn
 networkx
-PyQt5
-pandas
 ```
 
 These packages are necessary for numerical computations, data visualization, and network operations.
@@ -176,8 +174,6 @@ dependencies:
   - matplotlib
   - seaborn
   - networkx
-  - PyQt5
-  - pandas
 ```
 
 This command will create an environment with the specified Python version and packages.

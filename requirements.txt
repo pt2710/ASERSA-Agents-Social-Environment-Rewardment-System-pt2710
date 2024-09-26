@@ -3,5 +3,3 @@ numpy
 matplotlib
 seaborn
 networkx
-PyQt5
-pandas

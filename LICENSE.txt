@@ -4,7 +4,15 @@
 
 © **[Budd McCrackn]** **[2024]**. All rights reserved.
 
-This project is currently under development, and all rights are reserved by **[Budd McCrackn]**. The software, including its underlying mathematics and conceptual ideas, is the sole property of the author. No part of this project may be reproduced, distributed, or transmitted in any form or by any means without the prior written permission of the author.
+This project is currently under development, 
+and all rights are reserved by **[Budd McCrackn]**. 
+The software, including its underlying mathematics and conceptual ideas, 
+is the sole property of the author. 
+No part of this project may be reproduced, distributed, 
+or transmitted in any form or by any means without 
+the prior written permission of the author.
 
 **Planned Open Source Licensing:** 
-Upon completion and readiness for public release, this project will be made available under an open-source license. Please check back later for updates.
+Upon completion and readiness for public release, 
+this project will be made available under an open-source license. 
+Please check back later for updates.

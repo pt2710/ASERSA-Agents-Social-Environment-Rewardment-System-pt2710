@@ -1,7 +1,6 @@
 # functions.py
 import numpy as np
 from parameters import *
-import networkx as nx
 
 def compute_influence(W):
     I = I_MAX / (1 + np.exp(-K1 * (W - W0)))
@@ -63,7 +62,6 @@ def redistribute_taxes(agents, total_tax_collected):
         agent.W += share
 
 def calculate_C_best(agents, G, agent_id):
-    # Calculate the average competence of the agent's neighbors in the network G
     neighbors = list(G.neighbors(agent_id))
     if not neighbors:
         return agents[agent_id].C  # No neighbors, use own competence
@@ -80,5 +78,5 @@ def gini_coefficient(values):
         return 0
     relative_mean = cumulative_values / cumulative_sum
     index = np.arange(1, n+1)
-    gini = (n + 1 - 2 * np.sum(relative_mean)) / n
+    gini = (n + 1 - 2 * np.sum(relative_mean) / n)
     return gini
