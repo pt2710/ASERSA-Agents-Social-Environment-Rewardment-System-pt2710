@@ -51,8 +51,8 @@ class Agent:
     def update_state(self, delta_W, W_min, W_max, AS_max, E):
         # Calculate tax rate
         tau = calculate_tax_rate(self, W_min, W_max, AS_max, E)
-        tax_paid = tau * self.W
-        self.W += delta_W - tax_paid
+        self.tax_paid = tau * self.W  # Store tax_paid as an attribute
+        self.W += delta_W - self.tax_paid
 
         # Update Influence
         self.I = compute_influence(self.W)
@@ -72,7 +72,7 @@ class Agent:
         # Update Ambition
         self.A = compute_ambition(self.V)
 
-        return tax_paid
+        return self.tax_paid
 
     def update_inspiration(self, C_best):
         self.IN = compute_inspiration(self.C)

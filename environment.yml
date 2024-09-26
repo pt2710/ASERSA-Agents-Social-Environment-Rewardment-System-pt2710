@@ -8,3 +8,5 @@ dependencies:
   - matplotlib
   - seaborn
   - networkx
+  - PyQt5
+  - pandas
