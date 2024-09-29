@@ -26,27 +26,27 @@ class Agent:
         self.kappa_max = 0.2
 
         # DFIA Variables
-        self.XF = self.I
+        self.Sigma_i = 0
         self.Xz = 0
         self.Xzo = 0
-        self.Sigma_i = 0
 
         # Previous Agent Status for delta_AS
         self.prev_AS = self.AS
 
         # For data collection
-        self.history = {'W': [], 'I': [], 'AS': [], 'C': []}
+        self.history = {'W': [], 'I': [], 'AS': [], 'C': [], 'Xz': [], 'Xzo': []}
 
     def initialize_variables(self):
-        self.I = compute_influence(self.W)
-        self.AS = compute_agent_status(self.I)
-        self.R = compute_responsibility(self.AS)
-        self.S = compute_self_esteem(self.R)
-        self.V = compute_willpower(self.S)
-        self.A = compute_ambition(self.V)
-        self.C = compute_competence(0, self.A)
-        self.IN = compute_inspiration(self.C)
-        self.AL = compute_action_level(self.IN, self.V, self.A)
+        # Initialize variables (I and AS will be updated via DFIA)
+        self.I = 0
+        self.AS = 0
+        self.R = 0
+        self.S = 0
+        self.V = 0
+        self.A = 0
+        self.C = 0
+        self.IN = 0
+        self.AL = 0
 
     def update_state(self, delta_W, W_min, W_max, AS_max, E):
         # Calculate tax rate
@@ -54,23 +54,7 @@ class Agent:
         self.tax_paid = tau * self.W  # Store tax_paid as an attribute
         self.W += delta_W - self.tax_paid
 
-        # Update Influence
-        self.I = compute_influence(self.W)
-
-        # Update Agent Status
-        self.AS = compute_agent_status(self.I)
-
-        # Update Responsibility
-        self.R = compute_responsibility(self.AS)
-
-        # Update Self-Esteem
-        self.S = compute_self_esteem(self.R)
-
-        # Update Willpower
-        self.V = compute_willpower(self.S)
-
-        # Update Ambition
-        self.A = compute_ambition(self.V)
+        # Responsibility, Self-Esteem, Willpower, and Ambition will be updated after DFIA
 
         return self.tax_paid
 
@@ -119,24 +103,13 @@ class Agent:
         # Update Previous Performance
         self.prev_P = self.P
 
-    def update_DFIA_values(self, XnF, Xn, Xz, XrnF_X):
-        if XrnF_X == 0 or Xn == 0:
-            self.Sigma_i = 1
-        else:
-            self.Sigma_i = (XnF * (Xn - 1)) / (XrnF_X * Xn)
-        self.Xz = Xz * self.Sigma_i
-        self.Xzo = self.Xz - Xz
-
-    def adjust_influence_based_on_DFIA(self):
-        adjustment_factor = 1 + (self.Xzo / 100)
-        self.I *= adjustment_factor
-        self.I = max(0, min(self.I, I_MAX))
-
     def collect_data(self):
         self.history['W'].append(self.W)
         self.history['I'].append(self.I)
         self.history['AS'].append(self.AS)
         self.history['C'].append(self.C)
+        self.history['Xz'].append(self.Xz)
+        self.history['Xzo'].append(self.Xzo)
 
     def __str__(self):
         return f"Agent {self.agent_id}: W={self.W:.2f}, I={self.I:.2f}, AS={self.AS:.2f}, C={self.C:.2f}"

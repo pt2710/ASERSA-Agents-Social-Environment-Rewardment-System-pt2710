@@ -3,7 +3,7 @@ import numpy as np
 import networkx as nx
 from agent import Agent
 from parameters import *
-from functions import redistribute_taxes, calculate_C_best, compute_action_level, gini_coefficient
+from functions import compute_DFIA, redistribute_taxes, calculate_C_best, compute_action_level, gini_coefficient
 import pickle
 import csv
 import pandas as pd  # We'll use pandas for easier data manipulation
@@ -27,7 +27,7 @@ class Simulation:
         for i in range(NUM_AGENTS):
             agent = Agent(agent_id=i, initial_wealth=initial_wealths[i])
             self.agents.append(agent)
-            self.agent_histories[i] = {'W': [], 'I': [], 'AS': [], 'C': []}
+            self.agent_histories[i] = {'W': [], 'I': [], 'AS': [], 'C': [], 'Xz': [], 'Xzo': []}
         self.network = nx.erdos_renyi_graph(NUM_AGENTS, NETWORK_PROBABILITY)
     
     def start(self):
@@ -69,16 +69,7 @@ class Simulation:
             redistribute_taxes(self.agents, total_tax_collected)
 
             # DFIA Calculations
-            XnF = sum(agent.I for agent in self.agents)
-            Xz = z / Xn  # Theoretical volume per agent
-
-            for agent in self.agents:
-                XrnF_X = XnF - agent.I
-                agent.update_DFIA_values(XnF, Xn, Xz, XrnF_X)
-
-            # Adjust influence based on DFIA
-            for agent in self.agents:
-                agent.adjust_influence_based_on_DFIA()
+            compute_DFIA(self.agents, z)
 
             # Update inspiration and competence
             for agent_id, agent in enumerate(self.agents):
@@ -92,10 +83,14 @@ class Simulation:
                 self.agent_histories[agent_id]['I'].append(agent.I)
                 self.agent_histories[agent_id]['AS'].append(agent.AS)
                 self.agent_histories[agent_id]['C'].append(agent.C)
+                if 'Xz' in self.agent_histories[agent_id]:
+                    self.agent_histories[agent_id]['Xz'].append(agent.Xz)
+                if 'Xzo' in self.agent_histories[agent_id]:
+                    self.agent_histories[agent_id]['Xzo'].append(agent.Xzo)
 
             # Update rewards and weights
             for agent in self.agents:
-                community_contribution = agent.tax_paid  # Assuming tax_paid is stored in agent
+                community_contribution = agent.tax_paid
                 delta_AS = agent.AS - agent.prev_AS
                 agent.prev_AS = agent.AS
                 agent.compute_reward(DELTA_W_CONSTANT, community_contribution, delta_AS)

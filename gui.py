@@ -165,7 +165,7 @@ class MainWindow(QMainWindow):
             self.agent_table.setItem(i, 3, QTableWidgetItem(f"{agent.C:.2f}"))
             self.agent_table.setItem(i, 4, QTableWidgetItem(f"{agent.S:.2f}"))
 
-    def agent_selected(self, selected, deselected):
+    def agent_selected(self):
         selected_items = self.agent_table.selectedItems()
         if selected_items:
             agent_id = float(selected_items[0].text())

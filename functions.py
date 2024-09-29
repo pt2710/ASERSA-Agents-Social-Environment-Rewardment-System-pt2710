@@ -3,13 +3,29 @@ import numpy as np
 from parameters import *
 import networkx as nx
 
-def compute_influence(W):
-    I = I_MAX / (1 + np.exp(-K1 * (W - W0)))
-    return I
+def compute_DFIA(agents, z=100):
+    """
+    Compute the DFIA components for all agents.
+    - agents: list of Agent objects
+    - z: Total theoretical capacity (Zone), default is 100
+    """
+    Xn = len(agents)  # Number of agents
+    XnF = sum(agent.W for agent in agents)  # Total wealth (XF)
+    Xz = z / Xn  # Theoretical volume per agent
+    epsilon = 1e-5  # To prevent division by zero
 
-def compute_agent_status(I):
-    AS = K2 * (I ** ALPHA)
-    return AS
+    for agent in agents:
+        XrnF_t = XnF - agent.W  # Total wealth excluding the agent's own wealth
+        if XrnF_t == 0 or Xn == 0:
+            Sigma_i = 1
+        else:
+            Sigma_i = (XnF * (Xn - 1)) / ((XrnF_t * Xn) + epsilon)
+        agent.Sigma_i = Sigma_i
+        agent.Xz = Xz * Sigma_i
+        agent.Xzo = agent.Xz - Xz
+        # Update Influence and Agent Status
+        agent.I = agent.Xzo  # Xzo[t] represents relative Influence
+        agent.AS = agent.Xz  # Xz[t] represents relative volume (Agent Status)
 
 def compute_responsibility(AS):
     R = R0 * np.exp(K3 * AS)
@@ -82,3 +98,4 @@ def gini_coefficient(values):
     index = np.arange(1, n+1)
     gini = (n + 1 - 2 * np.sum(relative_mean)) / n
     return gini
+
