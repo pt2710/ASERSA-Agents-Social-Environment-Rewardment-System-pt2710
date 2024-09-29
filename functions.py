@@ -27,8 +27,8 @@ def compute_DFIA(agents, z=100):
         agent.I = agent.Xzo  # Xzo[t] represents relative Influence
         agent.AS = agent.Xz  # Xz[t] represents relative volume (Agent Status)
 
-def compute_responsibility(AS):
-    R = R0 * np.exp(K3 * AS)
+def compute_responsibility(I):
+    R = R0 * np.exp(K3 * I)
     return R
 
 def compute_self_esteem(R):

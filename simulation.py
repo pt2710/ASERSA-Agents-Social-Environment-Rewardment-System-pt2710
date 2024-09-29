@@ -83,10 +83,8 @@ class Simulation:
                 self.agent_histories[agent_id]['I'].append(agent.I)
                 self.agent_histories[agent_id]['AS'].append(agent.AS)
                 self.agent_histories[agent_id]['C'].append(agent.C)
-                if 'Xz' in self.agent_histories[agent_id]:
-                    self.agent_histories[agent_id]['Xz'].append(agent.Xz)
-                if 'Xzo' in self.agent_histories[agent_id]:
-                    self.agent_histories[agent_id]['Xzo'].append(agent.Xzo)
+                self.agent_histories[agent_id]['Xz'].append(agent.Xz)
+                self.agent_histories[agent_id]['Xzo'].append(agent.Xzo)
 
             # Update rewards and weights
             for agent in self.agents:
@@ -95,7 +93,7 @@ class Simulation:
                 agent.prev_AS = agent.AS
                 agent.compute_reward(DELTA_W_CONSTANT, community_contribution, delta_AS)
 
-            # Collect data
+            # Collect aggregate data
             avg_wealth = np.mean([agent.W for agent in self.agents])
             self.wealth_history.append(avg_wealth)
             self.time_series.append(self.time_step)
@@ -105,6 +103,13 @@ class Simulation:
             wealths = [agent.W for agent in self.agents]
             gini = gini_coefficient(wealths)
             self.gini_history.append(gini)
+
+            # Logging for debugging
+            print(f"Time Step {self.time_step}:")
+            print(f"  Average Wealth: {avg_wealth}")
+            print(f"  Gini Coefficient: {gini}")
+            print(f"  Average Competence: {avg_competence}")
+            print(f"  Agents' Wealth: {[agent.W for agent in self.agents]}")
 
     def export_data(self, filename_prefix):
         """
@@ -118,9 +123,11 @@ class Simulation:
             'Gini Coefficient': self.gini_history,
             'Average Competence': self.avg_competence_history
         })
+        print("Exporting Aggregate Data:")
+        print(aggregate_data.head())
         aggregate_filename = f"{filename_prefix}_aggregate_data.csv"
         aggregate_data.to_csv(aggregate_filename, index=False)
-        print(f"Aggregate data exported to {aggregate_filename}")
+        print(f"Aggregate data exported to {aggregate_filename} with {len(aggregate_data)} rows.")
 
         # Export individual agent data
         # Create a multi-index DataFrame
@@ -130,21 +137,15 @@ class Simulation:
             df['Time'] = self.time_series
             df['Agent ID'] = agent_id
             agent_data.append(df)
-        all_agents_data = pd.concat(agent_data)
-        agent_filename = f"{filename_prefix}_agent_data.csv"
-        all_agents_data.to_csv(agent_filename, index=False)
-        print(f"Agent data exported to {agent_filename}")
-
-        # Alternatively, save each agent's data to separate files (optional)
-        # Uncomment the following code if desired
-        """
-        for agent_id, history in self.agent_histories.items():
-            df = pd.DataFrame(history)
-            df['Time'] = self.time_series
-            agent_filename = f"{filename_prefix}_agent_{agent_id}_data.csv"
-            df.to_csv(agent_filename, index=False)
-            print(f"Agent {agent_id} data exported to {agent_filename}")
-        """
+        if agent_data:
+            all_agents_data = pd.concat(agent_data)
+            print("Exporting Agent Data:")
+            print(all_agents_data.head())
+            agent_filename = f"{filename_prefix}_agent_data.csv"
+            all_agents_data.to_csv(agent_filename, index=False)
+            print(f"Agent data exported to {agent_filename} with {len(all_agents_data)} rows.")
+        else:
+            print("No agent data to export.")
     def get_agents(self):
         return self.agents
     

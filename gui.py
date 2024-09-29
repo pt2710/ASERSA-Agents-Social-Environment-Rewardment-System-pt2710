@@ -99,15 +99,25 @@ class MainWindow(QMainWindow):
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
 
-    # Add the export_data method
     def export_data(self):
         filename_prefix, _ = QFileDialog.getSaveFileName(self, "Export Data", "", "CSV Files (*.csv)")
         if filename_prefix:
+            if not self.simulation.time_series:
+                self.log("No data available to export. Please run the simulation for some time steps before exporting.")
+                return
+            # Check if agent histories have data
+            empty_agents = [agent_id for agent_id, history in self.simulation.agent_histories.items() if not history['W']]
+            if empty_agents:
+                self.log(f"No data collected for agents: {empty_agents}. Please ensure the simulation is running correctly.")
+                return
             # Remove the .csv extension if present, as the method adds it
             if filename_prefix.endswith('.csv'):
                 filename_prefix = filename_prefix[:-4]
-            self.simulation.export_data(filename_prefix)
-            self.log(f"Data exported with prefix {filename_prefix}.")
+            try:
+                self.simulation.export_data(filename_prefix)
+                self.log(f"Data exported successfully with prefix '{filename_prefix}'.")
+            except Exception as e:
+                self.log(f"Error exporting data: {e}")
 
     def start_simulation(self):
         if self.is_paused:
