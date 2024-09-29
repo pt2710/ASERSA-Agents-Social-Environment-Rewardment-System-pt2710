@@ -1,4 +1,5 @@
 # gui.py
+import os
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QSlider, QTableWidget, QTableWidgetItem, QTextEdit,
@@ -7,20 +8,32 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QTimer, Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from mpl_toolkits.mplot3d import Axes3D
 from simulation import Simulation
 import networkx as nx
+import logging
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ASERA Model Simulation")
         self.simulation = Simulation()
+        self.zoom_factor = 1.0
+        self.reset_button = QPushButton("Reset View", self)
+        self.reset_button.clicked.connect(self.reset_view)
         self.initUI()
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_simulation)
         self.is_paused = True
-        self.agent_details_windows = []
-
+        self.agent_details_windows = [    
+        ]
+        self.zoom_factor = 1.0
+        self.reset_button = QPushButton("Reset View", self)
+        self.reset_button.clicked.connect(self.reset_view)
+        # Configure logging
+        logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger(__name__)
+    
     def initUI(self):
         # Main layout
         main_widget = QWidget()
@@ -74,50 +87,55 @@ class MainWindow(QMainWindow):
         middle_layout = QVBoxLayout()
         middle_layout.addWidget(QLabel("Agent Status Dashboard"))
         self.agent_table = QTableWidget()
-        self.agent_table.setColumnCount(5)
-        self.agent_table.setHorizontalHeaderLabels(["ID", "Wealth", "Influence", "Competence", "Self-Esteem"])
+        self.agent_table.setColumnCount(6)  # Updated to include DFIA components
+        self.agent_table.setHorizontalHeaderLabels(["ID", "W", "I", "AS", "C", "S"])
         self.agent_table.itemSelectionChanged.connect(self.agent_selected)
         middle_layout.addWidget(self.agent_table)
 
         # Right panel: Graphs and Network
-        right_layout = QVBoxLayout()
+        self.right_layout = QVBoxLayout()
         # Dynamic Graphs
-        right_layout.addWidget(QLabel("Dynamic Graphs"))
+        self.right_layout.addWidget(QLabel("Dynamic Graphs"))
         self.figure = Figure(figsize=(5, 3))
         self.canvas = FigureCanvas(self.figure)
-        right_layout.addWidget(self.canvas)
+        self.right_layout.addWidget(self.canvas)
         # Network Visualization
-        right_layout.addWidget(QLabel("Network Visualization"))
+        self.right_layout.addWidget(QLabel("Network Visualization"))
         self.network_figure = Figure(figsize=(5, 3))
         self.network_canvas = FigureCanvas(self.network_figure)
-        right_layout.addWidget(self.network_canvas)
+        self.right_layout.addWidget(self.network_canvas)
+
 
         # Assemble layouts
         main_layout.addLayout(left_layout)
         main_layout.addLayout(middle_layout)
-        main_layout.addLayout(right_layout)
+        main_layout.addLayout(self.right_layout)
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
 
     def export_data(self):
-        filename_prefix, _ = QFileDialog.getSaveFileName(self, "Export Data", "", "CSV Files (*.csv)")
-        if filename_prefix:
+        try:
             if not self.simulation.time_series:
                 self.log("No data available to export. Please run the simulation for some time steps before exporting.")
                 return
-            # Check if agent histories have data
-            empty_agents = [agent_id for agent_id, history in self.simulation.agent_histories.items() if not history['W']]
-            if empty_agents:
-                self.log(f"No data collected for agents: {empty_agents}. Please ensure the simulation is running correctly.")
-                return
-            # Remove the .csv extension if present, as the method adds it
-            if filename_prefix.endswith('.csv'):
-                filename_prefix = filename_prefix[:-4]
-            try:
-                self.simulation.export_data(filename_prefix)
-                self.log(f"Data exported successfully with prefix '{filename_prefix}'.")
-            except Exception as e:
-                self.log(f"Error exporting data: {e}")
+            # Remove any code that requests a filename from the user
+            self.simulation.export_data()
+            self.save_plots()  # If you have implemented plot saving
+            self.log("Data and plots exported successfully.")
+        except Exception as e:
+            self.log(f"Error exporting data: {e}")
+
+    def save_plots(self):
+        # Define the export directory
+        export_dir = os.path.join("simulation_data", "exportet_plots")
+        os.makedirs(export_dir, exist_ok=True)
+        # Save dynamic graph
+        dynamic_plot_path = os.path.join(export_dir, "average_wealth_over_time.png")
+        self.figure.savefig(dynamic_plot_path)
+        # Save network visualization
+        network_plot_path = os.path.join(export_dir, "network_visualization.png")
+        self.network_figure.savefig(network_plot_path)
+        self.log(f"Plots saved to {export_dir}.")
 
     def start_simulation(self):
         if self.is_paused:
@@ -172,14 +190,38 @@ class MainWindow(QMainWindow):
             self.agent_table.setItem(i, 0, QTableWidgetItem(str(agent.agent_id)))
             self.agent_table.setItem(i, 1, QTableWidgetItem(f"{agent.W:.2f}"))
             self.agent_table.setItem(i, 2, QTableWidgetItem(f"{agent.I:.2f}"))
-            self.agent_table.setItem(i, 3, QTableWidgetItem(f"{agent.C:.2f}"))
-            self.agent_table.setItem(i, 4, QTableWidgetItem(f"{agent.S:.2f}"))
+            self.agent_table.setItem(i, 3, QTableWidgetItem(f"{agent.AS:.2f}"))
+            self.agent_table.setItem(i, 4, QTableWidgetItem(f"{agent.C:.2f}"))
+            self.agent_table.setItem(i, 5, QTableWidgetItem(f"{agent.S:.2f}"))
 
     def agent_selected(self):
         selected_items = self.agent_table.selectedItems()
         if selected_items:
-            agent_id = float(selected_items[0].text())
-            self.show_agent_details(agent_id)
+            row = selected_items[0].row()
+            column = selected_items[0].column()
+            agent_id = int(self.agent_table.item(row, 0).text())
+            column_name = self.agent_table.horizontalHeaderItem(column).text()
+            self.show_agent_column_plot(agent_id, column_name)
+
+    def show_agent_column_plot(self, agent_id, column_name):
+        agent = self.simulation.get_agent_by_id(agent_id)
+        if agent:
+            time_series = self.simulation.get_time_series()
+            data = agent.history
+            if column_name == 'ID':
+                # Show all plots (default behavior)
+                self.show_agent_details(agent_id)
+            else:
+                # Show the plot for the selected column
+                value_series = data.get(column_name)
+                if value_series:
+                    agent_window = AgentColumnPlotWindow(agent_id, time_series, column_name, value_series)
+                    self.agent_details_windows.append(agent_window)
+                    agent_window.show()
+                else:
+                    self.log(f"No data available for {column_name} of Agent {agent_id}.")
+        else:
+            self.log(f"No agent found with ID: {agent_id}")
 
     def show_agent_details(self, agent_id):
         agent = self.simulation.get_agent_by_id(agent_id)
@@ -211,12 +253,59 @@ class MainWindow(QMainWindow):
         self.canvas.draw()
 
     def update_network(self):
-        # Update network visualization
         self.network_figure.clear()
-        ax = self.network_figure.add_subplot(111)
+        ax = self.network_figure.add_subplot(111, projection='3d')
         G = self.simulation.get_network()
-        pos = nx.spring_layout(G)
-        nx.draw(G, pos, ax=ax, node_size=20, with_labels=False)
+        pos = nx.spring_layout(G, dim=3)
+
+        # Center the network
+        x_coords = [p[0] for p in pos.values()]
+        y_coords = [p[1] for p in pos.values()]
+        z_coords = [p[2] for p in pos.values()]
+        center_x = sum(x_coords) / len(x_coords)
+        center_y = sum(y_coords) / len(y_coords)
+        center_z = sum(z_coords) / len(z_coords)
+
+        # Draw edges manually in 3D
+        for u, v in G.edges():
+            x = [pos[u][0] - center_x, pos[v][0] - center_x]
+            y = [pos[u][1] - center_y, pos[v][1] - center_y]
+            z = [pos[u][2] - center_z, pos[v][2] - center_z]
+            ax.plot(x, y, z, color='gray', alpha=0.5)
+
+        # Add nodes in 3D
+        for node in G.nodes():
+            x, y, z = pos[node]
+            ax.scatter(x - center_x, y - center_y, z - center_z, s=20)
+
+        # Set axis limits based on zoom factor
+        ax.set_xlim(-self.zoom_factor, self.zoom_factor)
+        ax.set_ylim(-self.zoom_factor, self.zoom_factor)
+        ax.set_zlim(-self.zoom_factor, self.zoom_factor)
+        ax.set_axis_off()
+
+        # Enable zooming
+        self.network_canvas.mpl_connect('scroll_event', self.zoom)
+
+        self.network_canvas.draw()
+
+    def zoom(self, event):
+        factor = 1.1 if event.button == 'down' else 0.9
+        self.zoom_factor *= factor
+        
+        ax = self.network_figure.axes[0]
+        ax.set_xlim(-self.zoom_factor, self.zoom_factor)
+        ax.set_ylim(-self.zoom_factor, self.zoom_factor)
+        ax.set_zlim(-self.zoom_factor, self.zoom_factor)
+        
+        self.network_canvas.draw()
+
+    def reset_view(self):
+        self.zoom_factor = 1.0
+        ax = self.network_figure.axes[0]
+        ax.set_xlim(-1, 1)
+        ax.set_ylim(-1, 1)
+        ax.set_zlim(-1, 1)
         self.network_canvas.draw()
 
     def save_simulation(self):
@@ -271,3 +360,27 @@ class AgentDetailsWindow(QDialog):
         ax.set_ylabel("Value")
         ax.legend()
         self.canvas.draw()
+
+class AgentColumnPlotWindow(QDialog):
+    def __init__(self, agent_id, time_series, column_name, value_series):
+        super().__init__()
+        self.setWindowTitle(f"Agent {agent_id} - {column_name} Over Time")
+
+        layout = QVBoxLayout()
+
+        # Create matplotlib Figure and Canvas
+        self.figure = Figure(figsize=(6, 4))
+        self.canvas = FigureCanvas(self.figure)
+
+        # Plot the selected column data
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+        ax.plot(time_series, value_series, label=column_name)
+        ax.set_title(f"Agent {agent_id} - {column_name} Over Time")
+        ax.set_xlabel("Time Step")
+        ax.set_ylabel(column_name)
+        ax.legend()
+        self.canvas.draw()
+
+        layout.addWidget(self.canvas)
+        self.setLayout(layout)

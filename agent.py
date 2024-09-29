@@ -34,7 +34,18 @@ class Agent:
         self.prev_AS = self.AS
 
         # For data collection
-        self.history = {'W': [], 'I': [], 'AS': [], 'C': [], 'Xz': [], 'Xzo': []}
+        self.history = {
+            'W': [],
+            'I': [],
+            'AS': [],
+            'C': [],
+            'Xz': [],
+            'Xzo': [],
+            'S': [],
+            'R': [],
+            'V': [],
+            'A': []    
+        }
 
     def initialize_variables(self):
         # Initialize variables (I and AS will be updated via DFIA)
@@ -57,6 +68,12 @@ class Agent:
         # Responsibility, Self-Esteem, Willpower, and Ambition will be updated after DFIA
 
         return self.tax_paid
+
+    def update_psychological_variables(self):
+        self.R = compute_responsibility(self.I)
+        self.S = compute_self_esteem(self.R)
+        self.V = compute_willpower(self.S)
+        self.A = compute_ambition(self.V)
 
     def update_inspiration(self, C_best):
         self.IN = compute_inspiration(self.C)
@@ -110,6 +127,12 @@ class Agent:
         self.history['C'].append(self.C)
         self.history['Xz'].append(self.Xz)
         self.history['Xzo'].append(self.Xzo)
+        self.history['S'].append(self.S)
+        self.history['R'].append(self.R)
+        self.history['V'].append(self.V)
+        self.history['A'].append(self.A)
+        print(f"Agent {self.agent_id} collected data at time {len(self.history['W'])}")
+
 
     def __str__(self):
         return f"Agent {self.agent_id}: W={self.W:.2f}, I={self.I:.2f}, AS={self.AS:.2f}, C={self.C:.2f}"

@@ -1,4 +1,8 @@
 # simulation.py
+import os
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 import numpy as np
 import networkx as nx
 from agent import Agent
@@ -8,6 +12,7 @@ import pickle
 import csv
 import pandas as pd  # We'll use pandas for easier data manipulation
 
+from datetime import datetime
 class Simulation:
     def __init__(self):
         self.agents = []
@@ -59,7 +64,7 @@ class Simulation:
             Xn = len(self.agents)
             z = 100  # Total theoretical capacity (Zone)
 
-            # Update agents' wealth and variables up to ambition
+            # Update agents' wealth and compute taxes
             for agent in self.agents:
                 delta_W = DELTA_W_CONSTANT
                 tax_paid = agent.update_state(delta_W, W_min, W_max, AS_max, E)
@@ -71,20 +76,16 @@ class Simulation:
             # DFIA Calculations
             compute_DFIA(self.agents, z)
 
-            # Update inspiration and competence
+            # Update psychological variables (Responsibility, Self-Esteem, Willpower, Ambition)
+            for agent in self.agents:
+                agent.update_psychological_variables()
+
+            # Update inspiration, competence, and action level
             for agent_id, agent in enumerate(self.agents):
                 C_best = calculate_C_best(self.agents, self.network, agent_id)
                 agent.update_inspiration(C_best)
                 agent.update_competence(C_best)
                 agent.AL = compute_action_level(agent.IN, agent.V, agent.A)
-                agent.collect_data()
-                # Store agent's history
-                self.agent_histories[agent_id]['W'].append(agent.W)
-                self.agent_histories[agent_id]['I'].append(agent.I)
-                self.agent_histories[agent_id]['AS'].append(agent.AS)
-                self.agent_histories[agent_id]['C'].append(agent.C)
-                self.agent_histories[agent_id]['Xz'].append(agent.Xz)
-                self.agent_histories[agent_id]['Xzo'].append(agent.Xzo)
 
             # Update rewards and weights
             for agent in self.agents:
@@ -92,6 +93,10 @@ class Simulation:
                 delta_AS = agent.AS - agent.prev_AS
                 agent.prev_AS = agent.AS
                 agent.compute_reward(DELTA_W_CONSTANT, community_contribution, delta_AS)
+
+            # Collect data after all updates
+            for agent in self.agents:
+                agent.collect_data()
 
             # Collect aggregate data
             avg_wealth = np.mean([agent.W for agent in self.agents])
@@ -111,41 +116,48 @@ class Simulation:
             print(f"  Average Competence: {avg_competence}")
             print(f"  Agents' Wealth: {[agent.W for agent in self.agents]}")
 
-    def export_data(self, filename_prefix):
+    def export_data(self):
         """
-        Exports simulation data to CSV files.
-        - filename_prefix: A string prefix for the filenames.
+        Exports aggregate data to 'simulation_data/exportet_data/aggregate_data.csv'
+        and agent data to 'simulation_data/exportet_data/agent_data.csv'.
         """
-        # Export aggregate data
-        aggregate_data = pd.DataFrame({
-            'Time': self.time_series,
-            'Average Wealth': self.wealth_history,
-            'Gini Coefficient': self.gini_history,
-            'Average Competence': self.avg_competence_history
-        })
-        print("Exporting Aggregate Data:")
-        print(aggregate_data.head())
-        aggregate_filename = f"{filename_prefix}_aggregate_data.csv"
-        aggregate_data.to_csv(aggregate_filename, index=False)
-        print(f"Aggregate data exported to {aggregate_filename} with {len(aggregate_data)} rows.")
+        try:
+            # Define the export directory and filenames
+            export_dir = os.path.join("simulation_data", "exportet_data")
+            os.makedirs(export_dir, exist_ok=True)
+            aggregate_filename = os.path.join(export_dir, "aggregate_data.csv")
+            agent_filename = os.path.join(export_dir, "agent_data.csv")
 
-        # Export individual agent data
-        # Create a multi-index DataFrame
-        agent_data = []
-        for agent_id, history in self.agent_histories.items():
-            df = pd.DataFrame(history)
-            df['Time'] = self.time_series
-            df['Agent ID'] = agent_id
-            agent_data.append(df)
-        if agent_data:
-            all_agents_data = pd.concat(agent_data)
-            print("Exporting Agent Data:")
-            print(all_agents_data.head())
-            agent_filename = f"{filename_prefix}_agent_data.csv"
-            all_agents_data.to_csv(agent_filename, index=False)
-            print(f"Agent data exported to {agent_filename} with {len(all_agents_data)} rows.")
-        else:
-            print("No agent data to export.")
+            # Export aggregate data
+            aggregate_data = pd.DataFrame({
+                'Time': self.time_series,
+                'Average Wealth': self.wealth_history,
+                'Gini Coefficient': self.gini_history,
+                'Average Competence': self.avg_competence_history
+            })
+
+            aggregate_data.to_csv(aggregate_filename, index=False)
+            logger.info(f"Aggregate data exported to {aggregate_filename} with {len(aggregate_data)} rows.")
+
+            # Export individual agent data
+            agent_data = []
+            for agent in self.agents:
+                if len(agent.history['W']) > 0:  # Ensure there's data
+                    df = pd.DataFrame(agent.history)
+                    df['Time'] = range(1, len(df) + 1)
+                    df['Agent ID'] = agent.agent_id
+                    agent_data.append(df)
+                else:
+                    logger.warning(f"No data for agent {agent.agent_id}")
+            if agent_data:
+                all_agents_data = pd.concat(agent_data, ignore_index=True)
+                all_agents_data.to_csv(agent_filename, index=False)
+                logger.info(f"Agent data exported to {agent_filename} with {len(all_agents_data)} rows.")
+            else:
+                logger.warning("No agent data to export.")
+        except Exception as e:
+            logger.error(f"Failed to export data: {e}")
+    
     def get_agents(self):
         return self.agents
     
