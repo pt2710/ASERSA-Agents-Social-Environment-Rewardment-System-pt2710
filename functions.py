@@ -1,7 +1,9 @@
 # functions.py
 import numpy as np
 from parameters import *
+import gui
 import networkx as nx
+import math
 
 def compute_DFIA(agents, z=100):
     """
@@ -27,33 +29,39 @@ def compute_DFIA(agents, z=100):
         agent.I = agent.Xzo  # Xzo[t] represents relative Influence
         agent.AS = agent.Xz  # Xz[t] represents relative volume (Agent Status)
 
-def compute_responsibility(I):
-    R = R0 * np.exp(K3 * I)
+def compute_responsibility(I, Sigma_i): # Calculated from relative influence and relative Social status
+    K3_value = gui.K3
+    R = R0 * np.exp(K3_value * (I / Sigma_i))
     return R
 
-def compute_self_esteem(R):
-    S = -K4 * ((R - ROPT) ** 2) + SMAX
+def compute_self_esteem(Xz, AS, avg_wealth_growth):
+    K4_value = gui.K4
+    S = K4_value * ((AS / Xz) ** 2) * avg_wealth_growth
     return S
 
-def compute_willpower(S):
-    V = V_MAX / (1 + np.exp(-K5 * (S - S0)))
+def compute_inspiration(I, I_max):
+    IN = PHI * (I_max - I)
+    return IN
+
+def compute_willpower(S, R, IN): # Calculated from Self esteem, Responsibility and Inspiration
+    K5_value = gui.K5
+    V = V_MAX / (1 + np.exp(K5_value * (S + R + IN)))
     return V
 
-def compute_ambition(V):
-    A = K6 * (V ** 2)
+def compute_ambition(IN, I, XrnF):
+    K6_value = gui.K6
+    scaled_XrnF = XrnF / 10000  # Scale down XrnF
+    A = K6_value * (IN**2 + I**2 + scaled_XrnF**2)
     return A
 
-def compute_competence(C, A):
-    delta_C = K7 * A * (C_MAX - C)
+def compute_competence(C):
+    K7_value = gui.K7
+    delta_C = K7_value * (C_MAX - C)
     C_new = C + delta_C
     return C_new
 
-def compute_inspiration(C):
-    IN = PHI * (C_BEST_INITIAL - C)
-    return IN
-
-def compute_action_level(IN, V, A):
-    AL = PSI * IN * (V + A)
+def compute_action_level(C_new, V, A):
+    AL = PSI * C_new * (V + A)
     return AL
 
 def calculate_tax_rate(agent, W_min, W_max, AS_max, E):

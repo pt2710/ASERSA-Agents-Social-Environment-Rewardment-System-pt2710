@@ -2,11 +2,14 @@
 import numpy as np
 from parameters import *
 from functions import *
+import gui
 
 class Agent:
     def __init__(self, agent_id, initial_wealth):
         self.agent_id = agent_id
         self.W = initial_wealth
+        self.avg_wealth_growth = 0
+        self.prev_wealth = initial_wealth
         self.initialize_variables()
         
         # Adaptive Reward Function Variables
@@ -27,6 +30,7 @@ class Agent:
 
         # DFIA Variables
         self.Sigma_i = 0
+        self.XrnF = 0 
         self.Xz = 0
         self.Xzo = 0
 
@@ -64,19 +68,25 @@ class Agent:
         tau = calculate_tax_rate(self, W_min, W_max, AS_max, E)
         self.tax_paid = tau * self.W  # Store tax_paid as an attribute
         self.W += delta_W - self.tax_paid
-
-        # Responsibility, Self-Esteem, Willpower, and Ambition will be updated after DFIA
+    
+        self.Xz = self.Xz
+        self.XrnF = self.XrnF
 
         return self.tax_paid
 
     def update_psychological_variables(self):
-        self.R = compute_responsibility(self.I)
-        self.S = compute_self_esteem(self.R)
-        self.V = compute_willpower(self.S)
-        self.A = compute_ambition(self.V)
+        self.R = compute_responsibility(self.I, self.Sigma_i)
+        if self.prev_wealth != 0:
+            self.avg_wealth_growth = (self.W - self.prev_wealth) / self.prev_wealth
+        else:
+            self.avg_wealth_growth = 0
+        self.prev_wealth = self.W
+        self.S = compute_self_esteem(self.Xz, self.AS, self.avg_wealth_growth)
+        self.V = compute_willpower(self.S, self.R, self.IN)
+        self.A = compute_ambition(self.IN, self.I, self.XrnF)
 
-    def update_inspiration(self, C_best):
-        self.IN = compute_inspiration(self.C)
+    def update_inspiration(self, I_max):
+        self.IN = compute_inspiration(self.I, I_max)
 
     def adjust_learning_rate(self, competence_gap):
         normalized_gap = competence_gap / C_MAX
@@ -87,7 +97,8 @@ class Agent:
     def update_competence(self, C_best):
         competence_gap = C_best - self.C
         self.kappa = self.adjust_learning_rate(competence_gap)
-        delta_C_self = K7 * (self.A + self.IN) * (C_MAX - self.C)
+        K7_value = gui.K7
+        delta_C_self = K7_value * (C_MAX - self.C)
         delta_C_best = self.kappa * competence_gap
         self.C += delta_C_self + delta_C_best
         self.C = max(0, min(self.C, C_MAX))

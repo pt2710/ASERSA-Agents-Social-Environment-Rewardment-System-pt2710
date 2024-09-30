@@ -111,10 +111,10 @@ class Simulation:
 
             # Logging for debugging
             print(f"Time Step {self.time_step}:")
-            print(f"  Average Wealth: {avg_wealth}")
-            print(f"  Gini Coefficient: {gini}")
-            print(f"  Average Competence: {avg_competence}")
-            print(f"  Agents' Wealth: {[agent.W for agent in self.agents]}")
+            print(f"Average Wealth: {avg_wealth}")
+            print(f"Gini Coefficient: {gini}")
+            print(f"Average Competence: {avg_competence}")
+            print(f"Agents' Wealth: {[agent.W for agent in self.agents]}")
 
     def export_data(self):
         """
@@ -183,6 +183,3 @@ class Simulation:
     def get_agent_by_id(self, agent_id):
         return next((a for a in self.agents if a.agent_id == agent_id), None)
     
-    def adjust_parameter(self, value):
-        for agent in self.agents:
-            agent.some_property = value

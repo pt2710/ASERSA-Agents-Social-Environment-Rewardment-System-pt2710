@@ -3,7 +3,7 @@ import os
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QSlider, QTableWidget, QTableWidgetItem, QTextEdit,
-    QFileDialog, QDialog
+    QFileDialog, QDialog, QScrollArea
 )
 from PyQt5.QtCore import QTimer, Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -13,23 +13,26 @@ from simulation import Simulation
 import networkx as nx
 import logging
 
+K1 = 0.0001
+K2 = 0.0001
+K3 = 0.0001
+K4 = 0.0001
+K5 = 0.1
+K6 = 0.001
+K7 = 0.01
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ASERA Model Simulation")
         self.simulation = Simulation()
         self.zoom_factor = 1.0
-        self.reset_button = QPushButton("Reset View", self)
-        self.reset_button.clicked.connect(self.reset_view)
         self.initUI()
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_simulation)
         self.is_paused = True
-        self.agent_details_windows = [    
-        ]
+        self.agent_details_windows = []
         self.zoom_factor = 1.0
-        self.reset_button = QPushButton("Reset View", self)
-        self.reset_button.clicked.connect(self.reset_view)
         # Configure logging
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
@@ -41,6 +44,78 @@ class MainWindow(QMainWindow):
 
         # Left panel: Controls and Statistics
         left_layout = QVBoxLayout()
+        
+        # Create a scroll area for the sliders
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        
+        # Create a widget to hold the sliders
+        slider_widget = QWidget()
+        slider_layout = QVBoxLayout(slider_widget)
+
+        # Add sliders to the slider layout
+        slider_layout.addWidget(QLabel("Influence Growth Rate"))
+        self.k1_slider = QSlider(Qt.Horizontal)
+        self.k1_slider.setMinimum(1)
+        self.k1_slider.setMaximum(10000)
+        self.k1_slider.setValue(int(K1 * 10000))
+        self.k1_slider.valueChanged.connect(self.update_k1)
+        slider_layout.addWidget(self.k1_slider)
+
+        slider_layout.addWidget(QLabel("Agent status Proportion"))
+        self.k2_slider = QSlider(Qt.Horizontal)
+        self.k2_slider.setMinimum(1)
+        self.k2_slider.setMaximum(10000)
+        self.k2_slider.setValue(int(K2 * 10000))
+        self.k2_slider.valueChanged.connect(self.update_k2)
+        slider_layout.addWidget(self.k2_slider)
+
+        slider_layout.addWidget(QLabel("Responsibility Growth Rate"))
+        self.k3_slider = QSlider(Qt.Horizontal)
+        self.k3_slider.setMinimum(1)
+        self.k3_slider.setMaximum(10000)
+        self.k3_slider.setValue(int(K3 * 10000))
+        self.k3_slider.valueChanged.connect(self.update_k3)
+        slider_layout.addWidget(self.k3_slider)
+
+        slider_layout.addWidget(QLabel("Self-esteem Controll Rate"))
+        self.k4_slider = QSlider(Qt.Horizontal)
+        self.k4_slider.setMinimum(1)
+        self.k4_slider.setMaximum(10000)
+        self.k4_slider.setValue(int(K4 * 10000))
+        self.k4_slider.valueChanged.connect(self.update_k4)
+        slider_layout.addWidget(self.k4_slider)
+
+        slider_layout.addWidget(QLabel("Willpower Growth Rate"))
+        self.k5_slider = QSlider(Qt.Horizontal)
+        self.k5_slider.setMinimum(1)
+        self.k5_slider.setMaximum(1000)
+        self.k5_slider.setValue(int(K5 * 10000))
+        self.k5_slider.valueChanged.connect(self.update_k5)
+        slider_layout.addWidget(self.k5_slider)
+
+        slider_layout.addWidget(QLabel("Ambtion Proportion"))
+        self.k6_slider = QSlider(Qt.Horizontal)
+        self.k6_slider.setMinimum(1)
+        self.k6_slider.setMaximum(1000)
+        self.k6_slider.setValue(int(K6 * 10000))
+        self.k6_slider.valueChanged.connect(self.update_k6)
+        slider_layout.addWidget(self.k6_slider)
+
+        slider_layout.addWidget(QLabel("Competence Learning Rate"))
+        self.k7_slider = QSlider(Qt.Horizontal)
+        self.k7_slider.setMinimum(1)
+        self.k7_slider.setMaximum(1000)
+        self.k7_slider.setValue(int(K7 * 10000))
+        self.k7_slider.valueChanged.connect(self.update_k7)
+        slider_layout.addWidget(self.k7_slider)
+
+        # Set the slider widget as the scroll area's widget
+        scroll_area.setWidget(slider_widget)
+
+        # Add the scroll area to the left layout
+        left_layout.addWidget(scroll_area)
+
         # Simulation Controls
         self.start_button = QPushButton("Start")
         self.start_button.clicked.connect(self.start_simulation)
@@ -62,15 +137,6 @@ class MainWindow(QMainWindow):
         self.export_button = QPushButton("Export Data")
         self.export_button.clicked.connect(self.export_data)
         left_layout.addWidget(self.export_button)
-
-        # Parameter Adjustment
-        self.param_slider = QSlider(Qt.Horizontal)
-        self.param_slider.setMinimum(0)
-        self.param_slider.setMaximum(100)
-        self.param_slider.setValue(50)
-        self.param_slider.valueChanged.connect(self.update_parameter)
-        left_layout.addWidget(QLabel("Parameter Adjustment"))
-        left_layout.addWidget(self.param_slider)
 
         # Statistics Panel
         left_layout.addWidget(QLabel("Statistics"))
@@ -100,11 +166,14 @@ class MainWindow(QMainWindow):
         self.canvas = FigureCanvas(self.figure)
         self.right_layout.addWidget(self.canvas)
         # Network Visualization
+        
         self.right_layout.addWidget(QLabel("Network Visualization"))
         self.network_figure = Figure(figsize=(5, 3))
         self.network_canvas = FigureCanvas(self.network_figure)
+        self.reset_button = QPushButton("Reset View")
+        self.reset_button.clicked.connect(self.reset_view)
+        self.right_layout.addWidget(self.reset_button)
         self.right_layout.addWidget(self.network_canvas)
-
 
         # Assemble layouts
         main_layout.addLayout(left_layout)
@@ -168,6 +237,41 @@ class MainWindow(QMainWindow):
         self.simulation.step()
         self.update_simulation()
         self.log("Simulation stepped.")
+
+    def update_k1(self):
+        global K1
+        K1 = self.k1_slider.value() / 10000.0
+        self.log(f"Influence growth rate adjusted to {K1}")
+
+    def update_k2(self):
+        global K2
+        K2 = self.k2_slider.value() / 10000.0
+        self.log(f"Proportional constant for self-esteem adjusted to {K2}")
+
+    def update_k3(self):
+        global K3
+        K3 = self.k3_slider.value() / 10000.0
+        self.log(f"Resposibility growth rate adjusted to {K3}")
+
+    def update_k4(self):
+        global K4
+        K4 = self.k4_slider.value() / 10000.0
+        self.log(f"Curve width for self-esteem adjusted to {K4}")
+
+    def update_k5(self):
+        global K5
+        K5 = self.k5_slider.value() / 10000.0
+        self.log(f"Willpower growth rate adjusted to {K5}")
+
+    def update_k6(self):
+        global K6
+        K6 = self.k6_slider.value() / 10000.0
+        self.log(f"Proportionality constant for ambition adjusted to {K6}")
+
+    def update_k7(self):
+        global K7
+        K7 = self.k7_slider.value() / 10000.0
+        self.log(f"Learning rate for competence adjusted to {K7}")
 
     def update_parameter(self, value):
         # Adjust a simulation parameter based on slider value
