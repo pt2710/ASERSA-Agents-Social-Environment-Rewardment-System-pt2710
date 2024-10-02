@@ -1,46 +1,56 @@
-# simulation.py
 import os
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+import pandas as pd
 import numpy as np
-import networkx as nx
-from agent import Agent
-from parameters import *
-from functions import compute_DFIA, redistribute_taxes, calculate_C_best, compute_action_level, gini_coefficient
 import pickle
-import csv
-import pandas as pd  # We'll use pandas for easier data manipulation
+from agent import *
+from network import create_agent_network
+from parameters import *
+from functions import *
+from policy import apply_tax_policy
 
-from datetime import datetime
 class Simulation:
-    def __init__(self):
+    def __init__(self, agent_id):
         self.agents = []
+        self.agent_id = agent_id
         self.time_step = 0
         self.running = False
+        self.agent_histories = {}
         self.network = None
-        self.agent_histories = {}  # Initialize agent_histories here
         self.initialize_simulation()
         self.wealth_history = []
         self.time_series = []
         self.gini_history = []
         self.avg_competence_history = []
-
-    def initialize_simulation(self):
-        initial_wealths = np.random.uniform(W_MIN, W_MAX, NUM_AGENTS)
-        self.agents = []
-        for i in range(NUM_AGENTS):
-            agent = Agent(agent_id=i, initial_wealth=initial_wealths[i])
-            self.agents.append(agent)
-            self.agent_histories[i] = {'W': [], 'I': [], 'AS': [], 'C': [], 'Xz': [], 'Xzo': []}
-        self.network = nx.erdos_renyi_graph(NUM_AGENTS, NETWORK_PROBABILITY)
+        self.current_policy = 'flat'
+        self.FLAT_TAX_RATE = 0.2
+        self.total_tax_collected = 0
+        self.ASPREV = 0
     
+    def initialize_simulation(self):
+        initial_tokens = {
+            'type 1': np.random.uniform(W_MIN, W_MAX, NUM_AGENTS),
+            'type 2': np.random.uniform(W_MIN, W_MAX, NUM_AGENTS),
+        }
+        for i in range(NUM_AGENTS):
+            self.tokens = {k: initial_tokens[k][i] for k in initial_tokens}
+            agent = Agent(
+                agent_id=i,
+                initial_tokens=self.tokens,
+                delta_tokens=DELTA_W_CONSTANT
+            )
+            self.agents.append(agent)
+
     def start(self):
         self.running = True
-    
+        logging.info("Simulation started.")
+
     def pause(self):
         self.running = False
-    
+        logging.info("Simulation paused.")
+
     def stop(self):
         self.running = False
         self.time_step = 0
@@ -49,137 +59,140 @@ class Simulation:
         self.time_series.clear()
         self.gini_history.clear()
         self.avg_competence_history.clear()
-    
+        logging.info("Simulation stopped and reset.")
+
     def step(self):
         if not self.running:
             self.update()
-    
+
     def update(self):
         if self.running:
             self.time_step += 1
-            total_tax_collected = 0
-            W_min = min(agent.W for agent in self.agents)
-            W_max = max(agent.W for agent in self.agents)
-            AS_max = max(agent.AS for agent in self.agents)
-            Xn = len(self.agents)
-            z = 100  # Total theoretical capacity (Zone)
-
-            # Update agents' wealth and compute taxes
+            self.total_tax_collected = {k: 0 for k in self.agents[0].tokens.keys()}
+            
             for agent in self.agents:
-                delta_W = DELTA_W_CONSTANT
-                tax_paid = agent.update_state(delta_W, W_min, W_max, AS_max, E)
-                total_tax_collected += tax_paid
+                self.delta_tokens = {
+                    'type 1': min(DELTA_W_CONSTANT['type 1'], MAX_TOKEN_CHANGE),
+                    'type 2': min(DELTA_W_CONSTANT['type 2'], MAX_TOKEN_CHANGE)
+                }
+            
+                tax_paid = agent.update_state()
+                for k, v in tax_paid.items():
+                    self.total_tax_collected[k] += v
+                self.community_contribution = sum(tax_paid.values())
 
-            # Redistribute taxes
-            redistribute_taxes(self.agents, total_tax_collected)
+            logger.info(f"Total tax collected before redistribution: {self.total_tax_collected}")
+            apply_tax_policy(self.current_policy, self.agents, self.total_tax_collected, self)
+            logger.info(f"Total tax collected after redistribution: {self.total_tax_collected}")
 
-            # DFIA Calculations
-            compute_DFIA(self.agents, z)
-
-            # Update psychological variables (Responsibility, Self-Esteem, Willpower, Ambition)
+            G = self.get_network()
+            # Update variables, rewards and weights
             for agent in self.agents:
-                agent.update_psychological_variables()
-
-            # Update inspiration, competence, and action level
-            for agent_id, agent in enumerate(self.agents):
-                C_best = calculate_C_best(self.agents, self.network, agent_id)
-                agent.update_inspiration(C_best)
-                agent.update_competence(C_best)
-                agent.AL = compute_action_level(agent.IN, agent.V, agent.A)
-
-            # Update rewards and weights
-            for agent in self.agents:
-                community_contribution = agent.tax_paid
-                delta_AS = agent.AS - agent.prev_AS
-                agent.prev_AS = agent.AS
-                agent.compute_reward(DELTA_W_CONSTANT, community_contribution, delta_AS)
-
-            # Collect data after all updates
-            for agent in self.agents:
+                self.AS, self.SS, self.SI, self.AI = compute_DFIA(self.agents)
+                self.R, self.S, self.V, self.A, self.IN, self.C, self.AL = agent.update_variables(G, self.agents)
+                self.C = compute_competence(G, agent.agent_id, self.agents)
+                self.AL = compute_action_level(self.C, self.V, self.A)
+        
+                if self.ASPREV is None:
+                    self.ASPREV = ASINI
+                else:
+                    self.DELTA_AS = self.AS - self.ASPREV
+                agent.compute_reward(self)
                 agent.collect_data()
 
-            # Collect aggregate data
-            avg_wealth = np.mean([agent.W for agent in self.agents])
+            avg_wealth = np.mean([sum(agent.tokens.values()) for agent in self.agents])
             self.wealth_history.append(avg_wealth)
+            logging.info(f"Average Wealth: {avg_wealth}")
             self.time_series.append(self.time_step)
-            avg_competence = np.mean([agent.C for agent in self.agents])
+            logging.info(f"Time Step {self.time_step}:")
+            avg_competence = np.mean([agent.C if agent.C is not None else 0 for agent in self.agents])
             self.avg_competence_history.append(avg_competence)
-            # Compute Gini coefficient
-            wealths = [agent.W for agent in self.agents]
+            logging.info(f"Average Competence: {avg_competence}")
+            wealths = [sum(agent.tokens.values()) for agent in self.agents]
+            logging.info(f"Agents' Wealth: {[sum(agent.tokens.values()) for agent in self.agents]}")
             gini = gini_coefficient(wealths)
             self.gini_history.append(gini)
+            logging.info(f"Gini Coefficient: {gini}")
 
-            # Logging for debugging
-            print(f"Time Step {self.time_step}:")
-            print(f"Average Wealth: {avg_wealth}")
-            print(f"Gini Coefficient: {gini}")
-            print(f"Average Competence: {avg_competence}")
-            print(f"Agents' Wealth: {[agent.W for agent in self.agents]}")
-
-    def export_data(self):
-        """
-        Exports aggregate data to 'simulation_data/exportet_data/aggregate_data.csv'
-        and agent data to 'simulation_data/exportet_data/agent_data.csv'.
-        """
-        try:
-            # Define the export directory and filenames
-            export_dir = os.path.join("simulation_data", "exportet_data")
-            os.makedirs(export_dir, exist_ok=True)
-            aggregate_filename = os.path.join(export_dir, "aggregate_data.csv")
-            agent_filename = os.path.join(export_dir, "agent_data.csv")
-
-            # Export aggregate data
-            aggregate_data = pd.DataFrame({
-                'Time': self.time_series,
-                'Average Wealth': self.wealth_history,
-                'Gini Coefficient': self.gini_history,
-                'Average Competence': self.avg_competence_history
-            })
-
-            aggregate_data.to_csv(aggregate_filename, index=False)
-            logger.info(f"Aggregate data exported to {aggregate_filename} with {len(aggregate_data)} rows.")
-
-            # Export individual agent data
-            agent_data = []
-            for agent in self.agents:
-                if len(agent.history['W']) > 0:  # Ensure there's data
-                    df = pd.DataFrame(agent.history)
-                    df['Time'] = range(1, len(df) + 1)
-                    df['Agent ID'] = agent.agent_id
-                    agent_data.append(df)
-                else:
-                    logger.warning(f"No data for agent {agent.agent_id}")
-            if agent_data:
-                all_agents_data = pd.concat(agent_data, ignore_index=True)
-                all_agents_data.to_csv(agent_filename, index=False)
-                logger.info(f"Agent data exported to {agent_filename} with {len(all_agents_data)} rows.")
-            else:
-                logger.warning("No agent data to export.")
-        except Exception as e:
-            logger.error(f"Failed to export data: {e}")
+    def apply_policy(self, policy_name):
+        self.current_policy = policy_name
+        # Ensure total_tax_collected is a dictionary
+        if not isinstance(self.total_tax_collected, dict):
+            self.total_tax_collected = {k: 0 for k in self.agents[0].tokens.keys()}
+        apply_tax_policy(self.current_policy, self.agents, self.total_tax_collected, self)
+        logging.info(f"Policy set to: {self.current_policy}")
     
     def get_agents(self):
         return self.agents
-    
-    def get_average_wealth(self):
-        return np.mean([agent.W for agent in self.agents])
-    
-    def get_gini_coefficient(self):
-        wealths = [agent.W for agent in self.agents]
-        return gini_coefficient(wealths)
-    
-    def get_average_competence(self):
-        return np.mean([agent.C for agent in self.agents])
-    
+
+    def get_agent_by_id(self, agent_id):
+        for agent in self.agents:
+            if agent.agent_id == agent_id:
+                return agent
+        return None
+
     def get_time_series(self):
         return self.time_series
-    
+
     def get_wealth_time_series(self):
         return self.wealth_history
-    
+
+    def get_gini_coefficient(self):
+        return self.gini_history[-1] if self.gini_history else 0
+
+    def get_average_wealth(self):
+        return self.wealth_history[-1] if self.wealth_history else 0
+
+    def get_average_competence(self):
+        return self.avg_competence_history[-1] if self.avg_competence_history else 0
+
     def get_network(self):
+        if self.network is None:
+            self.network = create_agent_network()
         return self.network
-    
-    def get_agent_by_id(self, agent_id):
-        return next((a for a in self.agents if a.agent_id == agent_id), None)
-    
+
+    def export_data(self):
+        export_dir = EXPORT_DIR
+        os.makedirs(export_dir, exist_ok=True)
+        
+        # Export aggregate data
+        aggregate_data = pd.DataFrame({
+            'Time Step': self.time_series,
+            'Average Wealth': self.wealth_history,
+            'Gini Coefficient': self.gini_history,
+            'Average Competence': self.avg_competence_history
+        })
+        
+        aggregate_data.to_csv(os.path.join(export_dir, 'aggregate_data.csv'), index=False)
+        
+        # Export individual agent data
+        for agent in self.agents:
+            agent_data = pd.DataFrame({
+                'Time Step': self.time_series,
+                'Tokens type 1': [tokens.get('type 1', 0) for tokens in agent.history['tokens']],
+                'Tokens type 2': [tokens.get('type 2', 0) for tokens in agent.history['tokens']],
+                'SF': agent.history['SF'],
+                'AF': agent.history['AF'],
+                'SI': agent.history['SI'],
+                'AI': agent.history['AI'],
+                'SS': agent.history['SS'],
+                'AS': agent.history['AS'],
+                'R': agent.history['R'],
+                'S': agent.history['S'],
+                'IN': agent.history['IN'],
+                'V': agent.history['V'],
+                'A': agent.history['A'],
+                'C': agent.history['C'],
+                'AL': agent.history['AL'],
+            })
+            
+            agent_data.to_csv(os.path.join(export_dir, f'agent_{agent.agent_id}_data.csv'), index=False)
+        
+        logging.info(f"Data exported to {export_dir}.")
+
+    @staticmethod
+    def load_simulation(filename):
+        with open(filename, 'rb') as f:
+            simulation = pickle.load(f)
+        logging.info(f"Simulation loaded from {filename}.")
+        return simulation

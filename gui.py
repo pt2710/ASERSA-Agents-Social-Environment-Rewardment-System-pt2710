@@ -1,44 +1,44 @@
-# gui.py
 import os
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QSlider, QTableWidget, QTableWidgetItem, QTextEdit,
-    QFileDialog, QDialog, QScrollArea
+    QFileDialog, QDialog, QScrollArea, QComboBox
 )
 from PyQt5.QtCore import QTimer, Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from mpl_toolkits.mplot3d import Axes3D
 from simulation import Simulation
 import networkx as nx
+import ctypes
 import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-K1 = 0.0001
-K2 = 0.0001
-K3 = 0.0001
-K4 = 0.0001
-K5 = 0.1
-K6 = 0.001
-K7 = 0.01
-
+# GUI Parameter Sliders (Initial Values)
+K6 = 0.01
+K7 = 0.1
+COPT = 100
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ASERA Model Simulation")
-        self.simulation = Simulation()
+        self.setWindowTitle("ASERSA Simulation Tool")
+        self.simulation = Simulation(0)
         self.zoom_factor = 1.0
+        user32 = ctypes.windll.user32
+        screen_width = user32.GetSystemMetrics(0)
+        screen_height = user32.GetSystemMetrics(1)
+        window_width = int(screen_width * 0.9)
+        window_height = int(screen_height * 0.9)
+        self.resize(window_width, window_height)
         self.initUI()
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_simulation)
         self.is_paused = True
         self.agent_details_windows = []
         self.zoom_factor = 1.0
-        # Configure logging
-        logging.basicConfig(level=logging.INFO)
-        self.logger = logging.getLogger(__name__)
-    
+        logger.info("GUI initialized.")
+
     def initUI(self):
-        # Main layout
         main_widget = QWidget()
         main_layout = QHBoxLayout()
 
@@ -53,62 +53,29 @@ class MainWindow(QMainWindow):
         slider_widget = QWidget()
         slider_layout = QVBoxLayout(slider_widget)
 
-        # Add sliders to the slider layout
-        slider_layout.addWidget(QLabel("Influence Growth Rate"))
-        self.k1_slider = QSlider(Qt.Horizontal)
-        self.k1_slider.setMinimum(1)
-        self.k1_slider.setMaximum(10000)
-        self.k1_slider.setValue(int(K1 * 10000))
-        self.k1_slider.valueChanged.connect(self.update_k1)
-        slider_layout.addWidget(self.k1_slider)
-
-        slider_layout.addWidget(QLabel("Agent status Proportion"))
-        self.k2_slider = QSlider(Qt.Horizontal)
-        self.k2_slider.setMinimum(1)
-        self.k2_slider.setMaximum(10000)
-        self.k2_slider.setValue(int(K2 * 10000))
-        self.k2_slider.valueChanged.connect(self.update_k2)
-        slider_layout.addWidget(self.k2_slider)
-
-        slider_layout.addWidget(QLabel("Responsibility Growth Rate"))
-        self.k3_slider = QSlider(Qt.Horizontal)
-        self.k3_slider.setMinimum(1)
-        self.k3_slider.setMaximum(10000)
-        self.k3_slider.setValue(int(K3 * 10000))
-        self.k3_slider.valueChanged.connect(self.update_k3)
-        slider_layout.addWidget(self.k3_slider)
-
-        slider_layout.addWidget(QLabel("Self-esteem Controll Rate"))
-        self.k4_slider = QSlider(Qt.Horizontal)
-        self.k4_slider.setMinimum(1)
-        self.k4_slider.setMaximum(10000)
-        self.k4_slider.setValue(int(K4 * 10000))
-        self.k4_slider.valueChanged.connect(self.update_k4)
-        slider_layout.addWidget(self.k4_slider)
-
-        slider_layout.addWidget(QLabel("Willpower Growth Rate"))
-        self.k5_slider = QSlider(Qt.Horizontal)
-        self.k5_slider.setMinimum(1)
-        self.k5_slider.setMaximum(1000)
-        self.k5_slider.setValue(int(K5 * 10000))
-        self.k5_slider.valueChanged.connect(self.update_k5)
-        slider_layout.addWidget(self.k5_slider)
-
-        slider_layout.addWidget(QLabel("Ambtion Proportion"))
+        slider_layout.addWidget(QLabel("Ambition Proportion"))
         self.k6_slider = QSlider(Qt.Horizontal)
         self.k6_slider.setMinimum(1)
         self.k6_slider.setMaximum(1000)
-        self.k6_slider.setValue(int(K6 * 10000))
+        self.k6_slider.setValue(int(K6 * 1000))
         self.k6_slider.valueChanged.connect(self.update_k6)
         slider_layout.addWidget(self.k6_slider)
 
-        slider_layout.addWidget(QLabel("Competence Learning Rate"))
+        slider_layout.addWidget(QLabel("Learning Rate for Competence"))
         self.k7_slider = QSlider(Qt.Horizontal)
         self.k7_slider.setMinimum(1)
         self.k7_slider.setMaximum(1000)
-        self.k7_slider.setValue(int(K7 * 10000))
+        self.k7_slider.setValue(int(K7 * 1000))
         self.k7_slider.valueChanged.connect(self.update_k7)
         slider_layout.addWidget(self.k7_slider)
+
+        slider_layout.addWidget(QLabel("Flat Tax Rate (%)"))
+        self.flat_tax_slider = QSlider(Qt.Horizontal)
+        self.flat_tax_slider.setMinimum(0)
+        self.flat_tax_slider.setMaximum(100)
+        self.flat_tax_slider.setValue(int(self.simulation.FLAT_TAX_RATE * 100))  # Convert to percentage
+        self.flat_tax_slider.valueChanged.connect(self.update_flat_tax_rate)
+        slider_layout.addWidget(self.flat_tax_slider)
 
         # Set the slider widget as the scroll area's widget
         scroll_area.setWidget(slider_widget)
@@ -134,9 +101,20 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.step_button)
         left_layout.addWidget(self.save_button)
         left_layout.addWidget(self.load_button)
+
+        # Export Data Button
         self.export_button = QPushButton("Export Data")
         self.export_button.clicked.connect(self.export_data)
         left_layout.addWidget(self.export_button)
+
+        # Tax Policy Selection
+        left_layout.addWidget(QLabel("Tax Policy"))
+        self.policy_combo = QComboBox()
+        self.policy_combo.addItems(['flat', 'ubi', 'progressive'])
+        left_layout.addWidget(self.policy_combo)
+        self.apply_policy_button = QPushButton("Apply Policy")
+        self.apply_policy_button.clicked.connect(self.apply_policy_from_gui)
+        left_layout.addWidget(self.apply_policy_button)
 
         # Statistics Panel
         left_layout.addWidget(QLabel("Statistics"))
@@ -153,55 +131,60 @@ class MainWindow(QMainWindow):
         middle_layout = QVBoxLayout()
         middle_layout.addWidget(QLabel("Agent Status Dashboard"))
         self.agent_table = QTableWidget()
-        self.agent_table.setColumnCount(6)  # Updated to include DFIA components
-        self.agent_table.setHorizontalHeaderLabels(["ID", "W", "I", "AS", "C", "S"])
+        self.agent_table.setColumnCount(6)
+        self.agent_table.setHorizontalHeaderLabels(["ID", "Type 1 Tokens", "Type 2 Tokens", "AI", "AS", "C"])
         self.agent_table.itemSelectionChanged.connect(self.agent_selected)
         middle_layout.addWidget(self.agent_table)
 
         # Right panel: Graphs and Network
-        self.right_layout = QVBoxLayout()
-        # Dynamic Graphs
-        self.right_layout.addWidget(QLabel("Dynamic Graphs"))
+        right_layout = QVBoxLayout()
+        right_layout.addWidget(QLabel("Dynamic Graphs"))
         self.figure = Figure(figsize=(5, 3))
         self.canvas = FigureCanvas(self.figure)
-        self.right_layout.addWidget(self.canvas)
-        # Network Visualization
+        right_layout.addWidget(self.canvas)
         
-        self.right_layout.addWidget(QLabel("Network Visualization"))
+        # Network Visualization
+        right_layout.addWidget(QLabel("Network Visualization"))
         self.network_figure = Figure(figsize=(5, 3))
         self.network_canvas = FigureCanvas(self.network_figure)
         self.reset_button = QPushButton("Reset View")
         self.reset_button.clicked.connect(self.reset_view)
-        self.right_layout.addWidget(self.reset_button)
-        self.right_layout.addWidget(self.network_canvas)
+        right_layout.addWidget(self.reset_button)
+        right_layout.addWidget(self.network_canvas)
 
         # Assemble layouts
         main_layout.addLayout(left_layout)
         main_layout.addLayout(middle_layout)
-        main_layout.addLayout(self.right_layout)
+        main_layout.addLayout(right_layout)
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
+
+    def apply_policy_from_gui(self):
+        policy_name = self.policy_combo.currentText()
+        # Ensure total_tax_collected is a dictionary
+        if not isinstance(self.simulation.total_tax_collected, dict):
+            self.simulation.total_tax_collected = {k: 0 for k in self.simulation.agents[0].tokens.keys()}
+        self.simulation.apply_policy(policy_name)
+        self.log(f"Applied tax policy: {policy_name}")
 
     def export_data(self):
         try:
             if not self.simulation.time_series:
                 self.log("No data available to export. Please run the simulation for some time steps before exporting.")
                 return
-            # Remove any code that requests a filename from the user
+            export_dir = os.path.join("simulation_data", "exported_data")
+            os.makedirs(export_dir, exist_ok=True)
             self.simulation.export_data()
-            self.save_plots()  # If you have implemented plot saving
+            self.save_plots()
             self.log("Data and plots exported successfully.")
         except Exception as e:
             self.log(f"Error exporting data: {e}")
 
     def save_plots(self):
-        # Define the export directory
-        export_dir = os.path.join("simulation_data", "exportet_plots")
+        export_dir = os.path.join("simulation_data", "exported_plots")
         os.makedirs(export_dir, exist_ok=True)
-        # Save dynamic graph
         dynamic_plot_path = os.path.join(export_dir, "average_wealth_over_time.png")
         self.figure.savefig(dynamic_plot_path)
-        # Save network visualization
         network_plot_path = os.path.join(export_dir, "network_visualization.png")
         self.network_figure.savefig(network_plot_path)
         self.log(f"Plots saved to {export_dir}.")
@@ -209,7 +192,7 @@ class MainWindow(QMainWindow):
     def start_simulation(self):
         if self.is_paused:
             self.simulation.start()
-            self.timer.start(1000)  # Update every second
+            self.timer.start(1000)
             self.start_button.setText("Pause")
             self.stop_button.setEnabled(True)
             self.step_button.setEnabled(False)
@@ -238,113 +221,98 @@ class MainWindow(QMainWindow):
         self.update_simulation()
         self.log("Simulation stepped.")
 
-    def update_k1(self):
-        global K1
-        K1 = self.k1_slider.value() / 10000.0
-        self.log(f"Influence growth rate adjusted to {K1}")
-
-    def update_k2(self):
-        global K2
-        K2 = self.k2_slider.value() / 10000.0
-        self.log(f"Proportional constant for self-esteem adjusted to {K2}")
-
-    def update_k3(self):
-        global K3
-        K3 = self.k3_slider.value() / 10000.0
-        self.log(f"Resposibility growth rate adjusted to {K3}")
-
-    def update_k4(self):
-        global K4
-        K4 = self.k4_slider.value() / 10000.0
-        self.log(f"Curve width for self-esteem adjusted to {K4}")
-
-    def update_k5(self):
-        global K5
-        K5 = self.k5_slider.value() / 10000.0
-        self.log(f"Willpower growth rate adjusted to {K5}")
-
     def update_k6(self):
         global K6
-        K6 = self.k6_slider.value() / 10000.0
-        self.log(f"Proportionality constant for ambition adjusted to {K6}")
+        K6 = self.k6_slider.value() / 100.0
+        self.log(f"Ambition proportion adjusted to {K6}")
 
     def update_k7(self):
         global K7
-        K7 = self.k7_slider.value() / 10000.0
-        self.log(f"Learning rate for competence adjusted to {K7}")
+        K7 = self.k7_slider.value() / 100.0
+        self.log(f"Competence learning rate adjusted to {K7}")
 
-    def update_parameter(self, value):
-        # Adjust a simulation parameter based on slider value
-        self.simulation.adjust_parameter(value)
-        self.log(f"Parameter adjusted to {value}.")
+    def update_flat_tax_rate(self, value):
+        self.simulation.FLAT_TAX_RATE = value / 100.0  # Convert from percentage to decimal
+        self.log(f"Flat tax rate adjusted to {self.simulation.FLAT_TAX_RATE:.2%}")
 
     def update_simulation(self):
-        # Update simulation state
         self.simulation.update()
-        # Update GUI elements
         self.update_agent_table()
-        self.update_stats()
+        self.update_stats()  # Make sure this is called
         self.update_graphs()
         self.update_network()
 
     def update_agent_table(self):
-        agents = self.simulation.get_agents()
-        self.agent_table.setRowCount(len(agents))
-        for i, agent in enumerate(agents):
+        self.agents = self.simulation.get_agents()
+        self.agent_table.setRowCount(len(self.agents))
+        for i, agent in enumerate(self.agents):
             self.agent_table.setItem(i, 0, QTableWidgetItem(str(agent.agent_id)))
-            self.agent_table.setItem(i, 1, QTableWidgetItem(f"{agent.W:.2f}"))
-            self.agent_table.setItem(i, 2, QTableWidgetItem(f"{agent.I:.2f}"))
-            self.agent_table.setItem(i, 3, QTableWidgetItem(f"{agent.AS:.2f}"))
-            self.agent_table.setItem(i, 4, QTableWidgetItem(f"{agent.C:.2f}"))
-            self.agent_table.setItem(i, 5, QTableWidgetItem(f"{agent.S:.2f}"))
+            self.agent_table.setItem(i, 1, QTableWidgetItem(f"{agent.tokens.get('type 1', 0):.2f}"))
+            self.agent_table.setItem(i, 2, QTableWidgetItem(f"{agent.tokens.get('type 2', 0):.2f}"))
+            self.agent_table.setItem(i, 3, QTableWidgetItem(f"{agent.AI:.2f}"))
+            self.agent_table.setItem(i, 4, QTableWidgetItem(f"{agent.AS:.2f}"))
+            self.agent_table.setItem(i, 5, QTableWidgetItem(f"{agent.C:.2f}" if agent.C is not None else "-"))
 
     def agent_selected(self):
         selected_items = self.agent_table.selectedItems()
         if selected_items:
             row = selected_items[0].row()
-            column = selected_items[0].column()
-            agent_id = int(self.agent_table.item(row, 0).text())
-            column_name = self.agent_table.horizontalHeaderItem(column).text()
-            self.show_agent_column_plot(agent_id, column_name)
-
-    def show_agent_column_plot(self, agent_id, column_name):
-        agent = self.simulation.get_agent_by_id(agent_id)
-        if agent:
-            time_series = self.simulation.get_time_series()
-            data = agent.history
-            if column_name == 'ID':
-                # Show all plots (default behavior)
-                self.show_agent_details(agent_id)
+            self.agent_id = int(self.agent_table.item(row, 0).text())
+            column = self.agent_table.currentColumn()
+            if column == 0:
+                self.show_agent_details_window(self.agent_id)
             else:
-                # Show the plot for the selected column
-                value_series = data.get(column_name)
-                if value_series:
-                    agent_window = AgentColumnPlotWindow(agent_id, time_series, column_name, value_series)
-                    self.agent_details_windows.append(agent_window)
-                    agent_window.show()
-                else:
-                    self.log(f"No data available for {column_name} of Agent {agent_id}.")
-        else:
-            self.log(f"No agent found with ID: {agent_id}")
+                self.show_specific_variable_plot(self.agent_id, column)
 
-    def show_agent_details(self, agent_id):
-        agent = self.simulation.get_agent_by_id(agent_id)
-        if agent:
+    def show_agent_details_window(self, agent_id):
+        self.agent = self.simulation.get_agent_by_id(agent_id)
+        if self.agent:
             time_series = self.simulation.get_time_series()
-            agent_window = AgentDetailsWindow(agent, time_series)
+            agent_window = AgentDetailsWindow(self.agent, time_series)
             self.agent_details_windows.append(agent_window)
             agent_window.show()
         else:
-            print(f"No agent found with ID: {agent_id}")
+            self.log(f"No agent found with ID: {agent_id}")
+
+    
+    def get_variable_data(self, variable_name):
+        if variable_name == "Type 1 Tokens":
+            return [tokens.get('type 1', 0) for tokens in self.agent.history['tokens']]
+        elif variable_name == "Type 2 Tokens":
+            return [tokens.get('type 2', 0) for tokens in self.agent.history['tokens']]
+        elif variable_name in ['AI', 'AS', 'C', 'S', 'R', 'V', 'A']:
+            return self.agent.history[variable_name]
+        return []
+
+    def show_specific_variable_plot(self, agent_id, column):
+        self.agent = self.simulation.get_agent_by_id(agent_id)
+        if self.agent:
+            time_series = self.simulation.get_time_series()
+            variable_name = self.agent_table.horizontalHeaderItem(column).text()
+            variable_data = self.get_variable_data(variable_name)
+            
+            # Ensure time series and variable data have the same length
+            min_length = min(len(time_series), len(variable_data))
+            time_series = time_series[:min_length]
+            variable_data = variable_data[:min_length]
+            
+            self.agent_window = AgentDetailsWindow(self.agent, time_series, variable_name, variable_data)
+            self.agent_details_windows.append(self.agent_window)
+            self.agent_window.show()
+        else:
+            self.log(f"No agent found with ID: {agent_id}")
 
     def update_stats(self):
-        avg_wealth = self.simulation.get_average_wealth()
-        gini = self.simulation.get_gini_coefficient()
-        avg_competence = self.simulation.get_average_competence()
-        self.stats_label.setText(f"Average Wealth: {avg_wealth:.2f}\nGini Coefficient: {gini:.2f}\nAverage Competence: {avg_competence:.2f}")
+        self.avg_wealth = self.simulation.get_average_wealth()
+        self.gini = self.simulation.get_gini_coefficient()
+        self.avg_competence = self.simulation.get_average_competence()
+        self.stats_label.setText(
+            f"Average Wealth: {self.avg_wealth:.2f}\n"
+            f"Gini Coefficient: {self.gini:.2f}\n"
+            f"Average Competence: {self.avg_competence:.2f}"
+        )
 
     def update_graphs(self):
-        # Update dynamic graphs
         self.figure.clear()
         ax = self.figure.add_subplot(111)
         time = self.simulation.get_time_series()
@@ -361,7 +329,6 @@ class MainWindow(QMainWindow):
         ax = self.network_figure.add_subplot(111, projection='3d')
         G = self.simulation.get_network()
         pos = nx.spring_layout(G, dim=3)
-
         # Center the network
         x_coords = [p[0] for p in pos.values()]
         y_coords = [p[1] for p in pos.values()]
@@ -369,39 +336,31 @@ class MainWindow(QMainWindow):
         center_x = sum(x_coords) / len(x_coords)
         center_y = sum(y_coords) / len(y_coords)
         center_z = sum(z_coords) / len(z_coords)
-
         # Draw edges manually in 3D
         for u, v in G.edges():
             x = [pos[u][0] - center_x, pos[v][0] - center_x]
             y = [pos[u][1] - center_y, pos[v][1] - center_y]
             z = [pos[u][2] - center_z, pos[v][2] - center_z]
             ax.plot(x, y, z, color='gray', alpha=0.5)
-
         # Add nodes in 3D
         for node in G.nodes():
             x, y, z = pos[node]
             ax.scatter(x - center_x, y - center_y, z - center_z, s=20)
-
         # Set axis limits based on zoom factor
         ax.set_xlim(-self.zoom_factor, self.zoom_factor)
         ax.set_ylim(-self.zoom_factor, self.zoom_factor)
         ax.set_zlim(-self.zoom_factor, self.zoom_factor)
         ax.set_axis_off()
-
-        # Enable zooming
         self.network_canvas.mpl_connect('scroll_event', self.zoom)
-
         self.network_canvas.draw()
 
     def zoom(self, event):
-        factor = 1.1 if event.button == 'down' else 0.9
+        factor = 2.0 if event.button == 'up' else 0.9
         self.zoom_factor *= factor
-        
         ax = self.network_figure.axes[0]
         ax.set_xlim(-self.zoom_factor, self.zoom_factor)
         ax.set_ylim(-self.zoom_factor, self.zoom_factor)
         ax.set_zlim(-self.zoom_factor, self.zoom_factor)
-        
         self.network_canvas.draw()
 
     def reset_view(self):
@@ -427,64 +386,92 @@ class MainWindow(QMainWindow):
 
     def log(self, message):
         self.log_text.append(message)
+        logger.info(message)
 
 class AgentDetailsWindow(QDialog):
-    def __init__(self, agent, time_series):
+    def __init__(self, agent, time_series, variable_name=None, variable_data=None):
         super().__init__()
-        self.setWindowTitle(f"Agent {agent.agent_id} Details")
         self.agent = agent
+        self.agent_id = agent.agent_id
         self.time_series = time_series
+        self.variable_name = variable_name
+        self.variable_data = variable_data
         self.initUI()
 
     def initUI(self):
         layout = QVBoxLayout()
 
-        # Create matplotlib Figure and Canvas
         self.figure = Figure(figsize=(6, 4))
         self.canvas = FigureCanvas(self.figure)
 
-        # Plot agent's historical data
-        self.plot_agent_history()
+        if self.variable_name:
+            self.plot_specific_variable()
+        else:
+            self.plot_agent_history()
 
         layout.addWidget(self.canvas)
         self.setLayout(layout)
 
+    def plot_specific_variable(self):
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+        
+        if self.time_series is not None and self.variable_data is not None:
+            if len(self.time_series) == len(self.variable_data):
+                ax.plot(self.time_series, self.variable_data)
+                ax.set_title(f"Agent {self.agent_id} - {self.variable_name} Over Time")
+                ax.set_xlabel("Time Step")
+                ax.set_ylabel(self.variable_name)
+            else:
+                ax.set_title(f"Agent {self.agent_id} - {self.variable_name} Over Time")
+                ax.set_xlabel("Time Step")
+                ax.set_ylabel(self.variable_name)
+                ax.text(0.5, 0.5, f"Data mismatch: Time series length {len(self.time_series)}, variable data length {len(self.variable_data)}",
+                        ha='center', va='center', transform=ax.transAxes)
+        else:
+            ax.set_title(f"Agent {self.agent_id} - {self.variable_name} Over Time")
+            ax.set_xlabel("Time Step")
+            ax.set_ylabel(self.variable_name)
+            ax.text(0.5, 0.5, "No data available for plotting",
+                    ha='center', va='center', transform=ax.transAxes)
+        
+        self.canvas.draw()
+
     def plot_agent_history(self):
         self.figure.clear()
         ax = self.figure.add_subplot(111)
-        # Get agent's history
         history = self.agent.history
         time = self.time_series
-        ax.plot(time, history['W'], label='Wealth')
-        ax.plot(time, history['I'], label='Influence')
-        ax.plot(time, history['C'], label='Competence')
-        ax.plot(time, history['AS'], label='Agent Status')
-        ax.set_title(f"Agent {self.agent.agent_id} Variables Over Time")
+        type1 = [tokens.get('type 1', 0) for tokens in history['tokens']]
+        type2 = [tokens.get('type 2', 0) for tokens in history['tokens']]
+        
+        # Log lengths for debugging
+        logger.info(f"Time length: {len(time)}, Type1 length: {len(type1)}, Type2 length: {len(type2)}")
+        
+        # Ensure time and data arrays have the same length
+        min_length = min(len(time), len(type1), len(type2), len(history['AI']), len(history['AS']), len(history['C']))
+        time = time[:min_length]
+        type1 = type1[:min_length]
+        type2 = type2[:min_length]
+        ai = history['AI'][:min_length]
+        as_ = history['AS'][:min_length]
+        c = history['C'][:min_length]
+
+        ax.plot(time, type1, label='Type 1 Tokens')
+        ax.plot(time, type2, label='Type 2 Tokens')
+        ax.plot(time, ai, label='AI (Agent influence)')
+        ax.plot(time, as_, label='AS (Agent Status)')
+        ax.plot(time, c, label='C (Competence Level)')
+        ax.set_title(f"Agent {self.agent_id} Variables Over Time")
         ax.set_xlabel("Time Step")
         ax.set_ylabel("Value")
         ax.legend()
         self.canvas.draw()
 
-class AgentColumnPlotWindow(QDialog):
-    def __init__(self, agent_id, time_series, column_name, value_series):
-        super().__init__()
-        self.setWindowTitle(f"Agent {agent_id} - {column_name} Over Time")
-
-        layout = QVBoxLayout()
-
-        # Create matplotlib Figure and Canvas
-        self.figure = Figure(figsize=(6, 4))
-        self.canvas = FigureCanvas(self.figure)
-
-        # Plot the selected column data
-        self.figure.clear()
-        ax = self.figure.add_subplot(111)
-        ax.plot(time_series, value_series, label=column_name)
-        ax.set_title(f"Agent {agent_id} - {column_name} Over Time")
-        ax.set_xlabel("Time Step")
-        ax.set_ylabel(column_name)
-        ax.legend()
-        self.canvas.draw()
-
-        layout.addWidget(self.canvas)
-        self.setLayout(layout)
+if __name__ == "__main__":
+    import sys
+    from PyQt5.QtWidgets import QApplication
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec_())

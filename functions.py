@@ -1,99 +1,132 @@
-# functions.py
 import numpy as np
 from parameters import *
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 import gui
 import networkx as nx
 import math
 
-def compute_DFIA(agents, z=100):
-    """
-    Compute the DFIA components for all agents.
-    - agents: list of Agent objects
-    - z: Total theoretical capacity (Zone), default is 100
-    """
-    Xn = len(agents)  # Number of agents
-    XnF = sum(agent.W for agent in agents)  # Total wealth (XF)
+def compute_DFIA(agents):
+    z = 100 # Zone consisting of 100% - (This is alfa null(an infinite scaleable theoretical space which always can be interpretted as 100% no matter the number of X's or the size of the force("F": value of variables)))
+    Xn = len(agents)  # Total number(n) of agents(X)
     Xz = z / Xn  # Theoretical volume per agent
-    epsilon = 1e-5  # To prevent division by zero
-
     for agent in agents:
-        XrnF_t = XnF - agent.W  # Total wealth excluding the agent's own wealth
-        if XrnF_t == 0 or Xn == 0:
-            Sigma_i = 1
-        else:
-            Sigma_i = (XnF * (Xn - 1)) / ((XrnF_t * Xn) + epsilon)
-        agent.Sigma_i = Sigma_i
-        agent.Xz = Xz * Sigma_i
-        agent.Xzo = agent.Xz - Xz
-        # Update Influence and Agent Status
-        agent.I = agent.Xzo  # Xzo[t] represents relative Influence
-        agent.AS = agent.Xz  # Xz[t] represents relative volume (Agent Status)
+        agent.XF_t = sum(agent.tokens.values()) # Relative force(F) of agent(X) - (number of tokens the specific agent currently holds)
+        agent.XnF_t = sum(sum(a.tokens.values()) for a in agents)  # Total relative force of all agents summed together
+        agent.XrnF_t = agent.XnF_t - agent.XF_t # # Total force of all agents summed together(XnF), exclusive the force of the specific agent(XF) currently under consideration
+        agent.Sigma_Xi_t = (agent.XnF_t * (Xn - 1)) / (agent.XrnF_t * Xn)
+        agent.Xz_t = Xz * agent.Sigma_Xi_t # Xz_t represents relative volume (Agent Status)
+        agent.Xzo_t = agent.Xz_t - Xz # Xzo_t represents relative Influence
+        """
+        Changing names of DFIA variables
+        """
+        agent.SF = agent.XrnF_t # Relative society force(SF)
+        agent.AF = agent.XF_t # Relative Agent force(AF)
+        agent.SS = z - agent.Xz_t # Relative society status(SS)
+        agent.AS = agent.Xz_t # Relative agent status(AS)
+        agent.SI = agent.Sigma_Xi_t # Relative society influence(SI)
+        agent.AI = agent.Xzo_t # # Relative influence(I)
+    
+    return agent.AS, agent.SS, agent.SI, agent.AI
 
-def compute_responsibility(I, Sigma_i): # Calculated from relative influence and relative Social status
-    K3_value = gui.K3
-    R = R0 * np.exp(K3_value * (I / Sigma_i))
+def compute_responsibility(AF, SF):
+    if AF == 0 or SF == 0:
+        return 0
+    force_ratio = AF / SF
+    normalized_ratio = force_ratio / (1 + force_ratio)
+    R = normalized_ratio * ROPT
     return R
 
-def compute_self_esteem(Xz, AS, avg_wealth_growth):
-    K4_value = gui.K4
-    S = K4_value * ((AS / Xz) ** 2) * avg_wealth_growth
+def compute_self_esteem(SS, AS):
+    if AS == 0:
+        return 0
+    status_ratio = AS / (SS + AS)
+    S = (status_ratio ** 2) * SOPT
     return S
 
-def compute_inspiration(I, I_max):
-    IN = PHI * (I_max - I)
+def compute_inspiration(AI, SI):
+    influence_ratio = AI / SI
+    result = influence_ratio * IOPT
+    if result >= 0:
+        IN = math.sqrt(result)
+    else:
+        IN = 0
     return IN
 
-def compute_willpower(S, R, IN): # Calculated from Self esteem, Responsibility and Inspiration
-    K5_value = gui.K5
-    V = V_MAX / (1 + np.exp(K5_value * (S + R + IN)))
+def compute_willpower(S, IN):
+    if VOPT is None or S == 0 or IN == 0:
+        return 0 
+    motivation = S * IN
+    V = VOPT * (1 - math.exp(-motivation))
     return V
 
-def compute_ambition(IN, I, XrnF):
-    K6_value = gui.K6
-    scaled_XrnF = XrnF / 10000  # Scale down XrnF
-    A = K6_value * (IN**2 + I**2 + scaled_XrnF**2)
+def compute_ambition(IN, R):
+    K6 = gui.K6
+    if IN == 0 or R == 0:
+        return 0
+    ratio = IN / R if R != 0 else 0
+    A = K6 * (1 - math.exp(-ratio))
     return A
 
-def compute_competence(C):
-    K7_value = gui.K7
-    delta_C = K7_value * (C_MAX - C)
-    C_new = C + delta_C
-    return C_new
-
-def compute_action_level(C_new, V, A):
-    AL = PSI * C_new * (V + A)
+def compute_action_level(C, V, A):
+    if C == 0 or V == 0 or A == 0:
+        return 0
+    motivation = (C * V * A) ** (1/3)
+    AL = PSI * (1 - math.exp(-motivation))
     return AL
 
-def calculate_tax_rate(agent, W_min, W_max, AS_max, E):
-    wealth_component = OMEGA_W * (agent.W - W_min) / (W_max - W_min) if W_max != W_min else 0
-    status_component = OMEGA_AS * agent.AS / AS_max if AS_max != 0 else 0
+def calculate_tax_rate(AS, tokens):
+    wealth_component = OMEGA_W * (sum(tokens.values()))
+    status_component = OMEGA_AS * AS / ASOPT if ASOPT != 0 else 0
     economic_component = OMEGA_E * E
     tau = TAU_MAX * (wealth_component + status_component + economic_component)
     tau = min(tau, TAU_MAX)
     return tau
 
 def redistribute_taxes(agents, total_tax_collected):
-    W_avg = np.mean([agent.W for agent in agents])
+    W_avg = np.mean([sum(agent.tokens.values()) for agent in agents])
     RD_indices = []
     for agent in agents:
-        RD = (W_avg - agent.W) / W_avg if W_avg != 0 else 0
+        RD = (W_avg - sum(agent.tokens.values())) / W_avg if W_avg != 0 else 0
         RD_indices.append(RD)
     RD_indices_theta = [RD ** THETA if RD > 0 else 0 for RD in RD_indices]
     total_RD = sum(RD_indices_theta)
     if total_RD == 0:
         return
     for i, agent in enumerate(agents):
-        share = (RD_indices_theta[i] / total_RD) * total_tax_collected if total_RD != 0 else 0
-        agent.W += share
+        share = (RD_indices_theta[i] / total_RD) * sum(total_tax_collected.values()) if total_RD != 0 else 0
+        agent.tokens['type 1'] += share
 
-def calculate_C_best(agents, G, agent_id):
-    # Calculate the average competence of the agent's neighbors in the network G
+def compute_competence(G, agent_id, agents):
+    K7 = gui.K7
+    COPT = gui.COPT  # Make sure COPT is defined in gui.py
+    
     neighbors = list(G.neighbors(agent_id))
     if not neighbors:
-        return agents[agent_id].C  # No neighbors, use own competence
-    neighbor_competences = [agents[n].C for n in neighbors]
-    C_best = np.mean(neighbor_competences)
-    return C_best
+        return agents[agent_id].C if hasattr(agents[agent_id], 'C') else 0
+    
+    neighbor_competences = [agents[n].C for n in neighbors if hasattr(agents[n], 'C')]
+    if not neighbor_competences:
+        return agents[agent_id].C if hasattr(agents[agent_id], 'C') else 0
+    
+    avg_neighbor_competence = np.mean(neighbor_competences)
+    
+    # Normalize the average neighbor competence
+    if avg_neighbor_competence > 0:
+        normalized_avg = avg_neighbor_competence / (avg_neighbor_competence + 1)
+    else:
+        normalized_avg = 0
+    
+    # Calculate competence based on normalized average
+    C = K7 * COPT * (1 - normalized_avg)
+    
+    # Ensure C is within a reasonable range
+    C = max(0, min(C, COPT))
+    
+    logging.info(f"Agent {agent_id}: Avg neighbor competence: {avg_neighbor_competence}, Normalized: {normalized_avg}, Calculated C: {C}")
+    
+    return C
 
 def gini_coefficient(values):
     sorted_values = np.sort(values)
@@ -106,4 +139,3 @@ def gini_coefficient(values):
     index = np.arange(1, n+1)
     gini = (n + 1 - 2 * np.sum(relative_mean)) / n
     return gini
-
