@@ -1,4 +1,4 @@
-# ASERSA Model Simulation
+# ASERSA - Realtime Interactive Simulation Model 
 
 **ASERSA** (Agents’ Social Environment Rewarding System Algorithm) is an innovative agent-based socio-economic model simulation inspired by real-world socio-economic systems. ASERSA is designed as a versatile platform for simulating, testing, training, and interpreting agent behavior across various contexts. It integrates key socio-economic principles such as wealth distribution, influence, competence development, taxation, and redistribution policies to create a dynamic and responsive simulation environment.
 
