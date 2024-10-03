@@ -62,7 +62,6 @@ class Agent:
         self.C = 0
         self.AL = 0
         
-        
     def transfer_tokens(self, recipient, token_type, amount):
             if self.tokens.get(token_type, 0) >= amount:
                 self.tokens[token_type] -= amount

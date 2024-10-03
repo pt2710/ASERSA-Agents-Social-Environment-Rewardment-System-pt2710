@@ -84,6 +84,25 @@ def calculate_tax_rate(AS, tokens):
     tau = min(tau, TAU_MAX)
     return tau
 
+def compute_competence(G, agent_id, agents):
+    K7 = gui.K7
+    COPT = gui.COPT 
+    neighbors = list(G.neighbors(agent_id))
+    if not neighbors:
+        return agents[agent_id].C if hasattr(agents[agent_id], 'C') else 0
+    neighbor_competences = [agents[n].C for n in neighbors if hasattr(agents[n], 'C')]
+    if not neighbor_competences:
+        return agents[agent_id].C if hasattr(agents[agent_id], 'C') else 0
+    avg_neighbor_competence = np.mean(neighbor_competences)
+    if avg_neighbor_competence > 0:
+        normalized_avg = avg_neighbor_competence / (avg_neighbor_competence + 1)
+    else:
+        normalized_avg = 0
+    C = K7 * COPT * (1 - normalized_avg)
+    C = max(0, min(C, COPT))
+    logging.info(f"Agent {agent_id}: Avg neighbor competence: {avg_neighbor_competence}, Normalized: {normalized_avg}, Calculated C: {C}")
+    return C
+
 def redistribute_taxes(agents, total_tax_collected):
     W_avg = np.mean([sum(agent.tokens.values()) for agent in agents])
     RD_indices = []
@@ -97,36 +116,6 @@ def redistribute_taxes(agents, total_tax_collected):
     for i, agent in enumerate(agents):
         share = (RD_indices_theta[i] / total_RD) * sum(total_tax_collected.values()) if total_RD != 0 else 0
         agent.tokens['type 1'] += share
-
-def compute_competence(G, agent_id, agents):
-    K7 = gui.K7
-    COPT = gui.COPT  # Make sure COPT is defined in gui.py
-    
-    neighbors = list(G.neighbors(agent_id))
-    if not neighbors:
-        return agents[agent_id].C if hasattr(agents[agent_id], 'C') else 0
-    
-    neighbor_competences = [agents[n].C for n in neighbors if hasattr(agents[n], 'C')]
-    if not neighbor_competences:
-        return agents[agent_id].C if hasattr(agents[agent_id], 'C') else 0
-    
-    avg_neighbor_competence = np.mean(neighbor_competences)
-    
-    # Normalize the average neighbor competence
-    if avg_neighbor_competence > 0:
-        normalized_avg = avg_neighbor_competence / (avg_neighbor_competence + 1)
-    else:
-        normalized_avg = 0
-    
-    # Calculate competence based on normalized average
-    C = K7 * COPT * (1 - normalized_avg)
-    
-    # Ensure C is within a reasonable range
-    C = max(0, min(C, COPT))
-    
-    logging.info(f"Agent {agent_id}: Avg neighbor competence: {avg_neighbor_competence}, Normalized: {normalized_avg}, Calculated C: {C}")
-    
-    return C
 
 def gini_coefficient(values):
     sorted_values = np.sort(values)
