@@ -4,8 +4,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 from parameters import *
 from functions import *
-
-
 class Agent:
     def __init__(self, agent_id, initial_tokens, delta_tokens):
         self.agent_id = agent_id

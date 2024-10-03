@@ -10,3 +10,4 @@ dependencies:
   - networkx
   - PyQt5
   - pandas
+  - scipy
