@@ -25,6 +25,8 @@ This project allows you to explore and analyze how different parameters and poli
 - [Common Issues and Troubleshooting](#common-issues-and-troubleshooting)
 
 ---
+<img width="863" alt="373139335-cdc45ab8-c268-44e7-a189-a0435dedf530" src="https://github.com/user-attachments/assets/7dc49ca1-511e-404a-bd9e-35095517d328">
+
 
 ## Project Overview
 
