@@ -92,21 +92,19 @@ The current phase of the ASERSA project is concentrated on interpreting the agen
 
 ## Project Structure
 
----
-
 ASERSA/
-├── analysis.py    # Code for data analysis and visualization
-├── agent.py       # Defines the Agent class and agent behaviors
-├── functions.py   # calculations and relationships
-├── gui.py         # GUI for interacting with the simulation
-├── license         # License information for the project
-├── main.py         # Main script to run the simulation
-├── network.py      # Handles the network effects between agents
-├── parameters.py       # constants and parameters
-├── policy.py           # tax and redistribution policies
-├── README.md           # Project documentation
-├── requirements.txt    # Python packages required
-└── environment.yml     # Conda environment configuration
+├── analysis.py
+├── agent.py
+├── functions.py
+├── gui.py
+├── license
+├── main.py
+├── network.py
+├── parameters.py
+├── policy.py
+├── README.md
+├── requirements.txt
+└── environment.yml
 
 ---
 
