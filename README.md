@@ -520,7 +520,3 @@ The ASERSA model simulation provides a rich environment for exploring socio-econ
 Whether you're a researcher, student, or enthusiast, this project offers a platform for learning and discovery.
 
 **Happy simulating!**
-
----
-
-**Note:** Replace placeholders like `https://github.com/yourusername/asera-model-simulation.git` with your actual repository URL and `[Budd McCrackn]` with your actual name if different.
