@@ -95,18 +95,18 @@ The current phase of the ASERSA project is concentrated on interpreting the agen
 ---
 
 ASERSA/
-├── analysis.py         # Code for data analysis and visualization
-├── agent.py            # Defines the Agent class and agent behaviors
-├── functions.py        # Definitions for calculations and relationships
-├── gui.py              # PyQt5-based GUI for interacting with the simulation
-├── license             # License information for the project
-├── main.py             # Main script to run the simulation
-├── network.py          # Handles the network effects between agents
-├── parameters.py       # Defines all constants and parameters used in the model
-├── policy.py           # Contains different tax and redistribution policies
+├── analysis.py    # Code for data analysis and visualization
+├── agent.py       # Defines the Agent class and agent behaviors
+├── functions.py   # calculations and relationships
+├── gui.py         # GUI for interacting with the simulation
+├── license         # License information for the project
+├── main.py         # Main script to run the simulation
+├── network.py      # Handles the network effects between agents
+├── parameters.py       # constants and parameters
+├── policy.py           # tax and redistribution policies
 ├── README.md           # Project documentation
-├── requirements.txt    # Python packages required for the project (for pip users)
-└── environment.yml     # Specifies the Conda environment configuration
+├── requirements.txt    # Python packages required
+└── environment.yml     # Conda environment configuration
 
 ---
 
